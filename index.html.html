@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>九年八班 數位資訊看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #020617;
+            color: white;
+            overflow-y: auto;
+            min-height: 100vh;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 35s linear infinite;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        @media (min-height: 800px) {
+            .main-content {
+                height: calc(100vh - 280px);
+            }
+        }
+    </style>
+</head>
+<body class="p-4 flex flex-col space-y-4">
+
+    <!-- 頂部欄 -->
+    <header class="flex justify-between items-center glass-panel rounded-2xl p-4 shadow-xl shrink-0">
+        <div class="flex items-center space-x-4">
+            <div class="bg-blue-600 p-3 rounded-xl shadow-lg">
+                <i class="fas fa-book-open text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">九年八班 數位資訊看板</h1>
+                <div class="flex items-center space-x-3 mt-1">
+                    <p id="date-display" class="text-slate-400 text-sm flex items-center">
+                        <i class="far fa-calendar-alt mr-1.5"></i> 載入日期中...
+                    </p>
+                    <span id="status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500/20 text-blue-400">
+                        ● 資料同步中
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex space-x-4">
+            <div class="bg-slate-800/80 border border-slate-700 px-4 py-2 rounded-xl flex items-center space-x-3">
+                <div class="text-xs text-slate-400 font-bold leading-tight text-center">段考<br>倒數</div>
+                <div id="exam-countdown" class="text-3xl font-black text-yellow-400">--</div>
+            </div>
+            <div class="bg-orange-500/10 border border-orange-500/30 px-4 py-2 rounded-xl flex items-center space-x-3">
+                <div class="text-xs text-orange-300 font-bold leading-tight text-center">會考<br>倒數</div>
+                <div id="final-countdown" class="text-3xl font-black text-orange-500">--</div>
+            </div>
+        </div>
+
+        <div class="text-right">
+            <span id="clock-display" class="text-5xl font-mono font-bold text-blue-400">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- 跑馬燈 -->
+    <div class="bg-red-600/90 rounded-xl h-12 flex items-center overflow-hidden shadow-lg shrink-0">
+        <div class="bg-red-800 px-4 h-full flex items-center z-10 font-bold italic">
+            <i class="fas fa-bullhorn mr-2"></i>
+            <span>NEWS</span>
+        </div>
+        <div class="flex-1 overflow-hidden relative">
+            <div id="marquee-content" class="animate-marquee text-xl font-bold">
+                正在從雲端讀取最新公告...
+            </div>
+        </div>
+    </div>
+
+    <!-- 中間主要內容區 -->
+    <div class="main-content flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 min-h-0">
+        <!-- 聯絡簿 -->
+        <section class="flex-[1.2] glass-panel rounded-2xl p-6 flex flex-col shadow-inner overflow-hidden min-h-[400px]">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-4 flex items-center">
+                <span class="bg-yellow-400 w-2 h-7 rounded-full mr-3"></span>
+                今日聯絡簿
+            </h2>
+            <ul id="homework-list" class="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
+                <li class="flex items-start space-x-3 bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 italic text-slate-400">
+                    載入中...
+                </li>
+            </ul>
+        </section>
+
+        <!-- 右側資訊 -->
+        <section class="flex-1 flex flex-col space-y-4">
+            <div class="flex-[1.5] glass-panel rounded-2xl p-6 flex flex-col overflow-hidden min-h-[250px]">
+                <h2 class="text-2xl font-bold text-orange-400 mb-4 flex items-center">
+                    <i class="fas fa-exclamation-circle mr-2"></i> 作業未交名單
+                </h2>
+                <div id="missing-list" class="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
+                    <!-- 作業名單 -->
+                </div>
+            </div>
+
+            <!-- 重要提醒區域：已修改為支援多筆顯示 -->
+            <div class="flex-1 bg-amber-200 rounded-2xl p-5 shadow-lg border-b-4 border-amber-400 text-slate-900 overflow-hidden flex flex-col">
+                <h3 class="text-xl font-black mb-2 underline decoration-amber-500 underline-offset-4 shrink-0">
+                    重要提醒！
+                </h3>
+                <div id="important-note-container" class="text-xl font-bold leading-tight overflow-y-auto custom-scrollbar">
+                    正在載入提醒...
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 底部工具列 -->
+    <footer class="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0 pb-4">
+        <!-- 隨機抽號 -->
+        <div class="bg-indigo-900/50 border border-indigo-500/30 rounded-2xl p-3 flex flex-col items-center justify-center min-h-[120px]">
+            <div class="text-indigo-300 text-xs font-bold mb-1 uppercase tracking-wider">Lucky Picker (隨機抽號)</div>
+            <div class="flex items-center space-x-6">
+                <div id="lucky-number-display" class="text-6xl font-black text-white">
+                    ?<span class="text-xl ml-1 font-normal opacity-50">號</span>
+                </div>
+                <button onclick="pickLuckyNumber()" id="btn-spin" class="bg-indigo-600 hover:bg-indigo-500 p-4 rounded-2xl transition-all active:scale-90 shadow-lg">
+                    <i class="fas fa-sync-alt text-xl" id="spin-icon"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 計時器 -->
+        <div class="bg-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-700 min-h-[120px]">
+            <div class="text-slate-400 text-xs font-bold mb-1 uppercase tracking-wider">Timer (計時器)</div>
+            <div id="timer-display" class="text-5xl font-mono font-bold mb-2 text-emerald-400">
+                05:00
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="adjustTimer(-60)" class="p-2 bg-slate-700 rounded-lg hover:bg-slate-600"><i class="fas fa-minus"></i></button>
+                <button onclick="toggleTimer()" id="btn-timer-toggle" class="px-6 py-2 rounded-lg bg-emerald-600 transition-all font-bold">
+                    <i class="fas fa-play" id="timer-icon"></i>
+                </button>
+                <button onclick="adjustTimer(60)" class="p-2 bg-slate-700 rounded-lg hover:bg-slate-600"><i class="fas fa-plus"></i></button>
+                <button onclick="resetTimer()" class="p-2 bg-slate-700 rounded-lg text-red-400"><i class="fas fa-redo-alt"></i></button>
+            </div>
+        </div>
+
+        <!-- 常用連結 -->
+        <div class="bg-slate-800 rounded-2xl p-4 flex flex-col justify-center space-y-3 border border-slate-700 shadow-lg min-h-[120px]">
+            <div class="text-slate-400 text-xs font-bold uppercase tracking-wider text-center mb-1">常用連結</div>
+            <a href="https://padlet.com/teacher133_5/padlet-rmnqtuy0xqgy53qh" target="_blank" class="bg-blue-600 text-lg font-bold py-2 px-6 rounded-xl flex items-center justify-between hover:opacity-90 transition-opacity">
+                908電子布告欄 <i class="fas fa-external-link-alt"></i>
+            </a>
+            <a href="https://www.ycjh.hlc.edu.tw/" target="_blank" class="bg-emerald-600 text-lg font-bold py-2 px-6 rounded-xl flex items-center justify-between hover:opacity-90 transition-opacity">
+                學校網頁 <i class="fas fa-external-link-alt"></i>
+            </a>
+        </div>
+    </footer>
+
+    <script>
+        const SHEET_URL = "https://script.google.com/macros/s/AKfycbyswyq2zdv2kT0CePnJLNfWvavQ4pz8ieTnzntyaAq7JJcTJ7LCZXOaVYHdkhUexQLV/exec";
+        const CLASS_SIZE = 25;
+        const EXAM_DATE = new Date("2026-01-21T08:00:00");
+        const FINAL_EXAM_DATE = new Date("2026-05-16T08:00:00");
+
+        let countdownSeconds = 300;
+        let isCounting = false;
+        let timerInterval = null;
+        let isSpinning = false;
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock-display').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+            document.getElementById('date-display').innerHTML = `<i class="far fa-calendar-alt mr-1.5"></i> ${now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}`;
+            updateDDay();
+        }
+
+        function updateDDay() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const calc = (target) => Math.max(0, Math.ceil((target - today) / (1000 * 60 * 60 * 24)));
+            document.getElementById('exam-countdown').textContent = calc(EXAM_DATE);
+            document.getElementById('final-countdown').textContent = calc(FINAL_EXAM_DATE);
+        }
+
+        async function fetchData() {
+            const statusBadge = document.getElementById('status-badge');
+            try {
+                statusBadge.textContent = "● 資料同步中";
+                statusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500/20 text-blue-400";
+
+                const response = await fetch(`${SHEET_URL}?t=${Date.now()}`);
+                const data = await response.json();
+                const rows = Array.isArray(data) ? data : (data.data || []);
+
+                if (rows.length > 0) {
+                    // 1. 聯絡簿
+                    const hwItems = rows.filter(r => r.類別 === "聯絡簿" && r.內容).map(r => r.內容);
+                    document.getElementById('homework-list').innerHTML = hwItems.length > 0 ? 
+                        hwItems.map((item, i) => `
+                            <li class="flex items-start space-x-3 bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                                <span class="bg-blue-600/80 text-white w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold shrink-0">${i+1}</span>
+                                <span class="text-2xl font-medium">${item}</span>
+                            </li>
+                        `).join('') : '<li class="p-4 text-slate-500">今日尚無聯絡簿內容</li>';
+
+                    // 2. 跑馬燈
+                    const annItems = rows.filter(r => r.類別 === "跑馬燈" && r.內容).map(r => r.內容);
+                    document.getElementById('marquee-content').textContent = annItems.length > 0 ? annItems.join("　●　") : "歡迎來到九年八班教室";
+
+                    // 3. 重要提醒 (修改處：支援多筆顯示)
+                    const notes = rows.filter(r => r.類別 === "重要提醒" && r.內容).map(r => r.內容);
+                    document.getElementById('important-note-container').innerHTML = notes.length > 0 ? 
+                        notes.map(n => `<div class="mb-2">● ${n}</div>`).join('') : "請保持優良生活習慣";
+
+                    // 4. 作業未交
+                    const missingItems = rows.filter(r => r.類別 === "作業未交");
+                    document.getElementById('missing-list').innerHTML = missingItems.length > 0 ? 
+                        missingItems.map(item => `
+                            <div class="flex items-center justify-between bg-orange-500/5 border border-orange-500/20 p-3 rounded-xl">
+                                <span class="text-xl font-bold text-orange-300 w-16">${item.科目 || "其他"}</span>
+                                <span class="flex-1 text-2xl font-mono font-black text-orange-100 text-right tracking-widest">${item.內容 || "全齊"}</span>
+                            </div>
+                        `).join('') : '<div class="p-4 text-emerald-400 text-center font-bold">作業全部交齊！</div>';
+
+                    statusBadge.textContent = "● 雲端連線中";
+                    statusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400";
+                }
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                statusBadge.textContent = "● 連線異常";
+                statusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-400";
+            }
+        }
+
+        function pickLuckyNumber() {
+            if (isSpinning) return;
+            isSpinning = true;
+            const display = document.getElementById('lucky-number-display');
+            const icon = document.getElementById('spin-icon');
+            icon.classList.add('animate-spin');
+            let count = 0;
+            const interval = setInterval(() => {
+                const rand = Math.floor(Math.random() * CLASS_SIZE) + 1;
+                display.innerHTML = `${rand}<span class="text-xl ml-1 font-normal opacity-50">號</span>`;
+                if (++count > 15) {
+                    clearInterval(interval);
+                    isSpinning = false;
+                    icon.classList.remove('animate-spin');
+                }
+            }, 60);
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60);
+            const rs = s % 60;
+            return `${m.toString().padStart(2, '0')}:${rs.toString().padStart(2, '0')}`;
+        }
+
+        function toggleTimer() {
+            isCounting = !isCounting;
+            const icon = document.getElementById('timer-icon');
+            const btn = document.getElementById('btn-timer-toggle');
+            if (isCounting) {
+                icon.className = 'fas fa-pause';
+                btn.className = 'px-6 py-2 rounded-lg bg-orange-600 transition-all font-bold';
+                timerInterval = setInterval(() => {
+                    if (countdownSeconds > 0) {
+                        countdownSeconds--;
+                        renderTimer();
+                    } else {
+                        stopTimer();
+                    }
+                }, 1000);
+            } else {
+                stopTimer();
+            }
+        }
+
+        function stopTimer() {
+            isCounting = false;
+            clearInterval(timerInterval);
+            document.getElementById('timer-icon').className = 'fas fa-play';
+            document.getElementById('btn-timer-toggle').className = 'px-6 py-2 rounded-lg bg-emerald-600 transition-all font-bold';
+        }
+
+        function adjustTimer(val) {
+            countdownSeconds = Math.max(0, countdownSeconds + val);
+            renderTimer();
+        }
+
+        function resetTimer() {
+            stopTimer();
+            countdownSeconds = 300;
+            renderTimer();
+        }
+
+        function renderTimer() {
+            const display = document.getElementById('timer-display');
+            display.textContent = formatTime(countdownSeconds);
+            if (countdownSeconds < 10 && countdownSeconds > 0) {
+                display.classList.add('text-red-500', 'animate-pulse');
+            } else {
+                display.classList.remove('text-red-500', 'animate-pulse');
+            }
+        }
+
+        setInterval(updateClock, 1000);
+        updateClock();
+        fetchData();
+        setInterval(fetchData, 60000);
+    </script>
+</body>
+</html>
