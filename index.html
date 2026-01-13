@@ -26,6 +26,7 @@
         let db, auth, user;
         let timerInterval = null;
         let timerSeconds = 300; 
+        let selectedQuoteType = 'quote'; // 預設類別
 
         const DATES = { 
             exam: "2026-01-21", 
@@ -40,6 +41,7 @@
             missing: [{ subject: "數學", students: [{id: "01", done: false}] }],
             important: "1. 記得帶環保餐具。\n2. 明天早自習測驗。",
             quote: "「努力不一定成功，但不努力一定很輕鬆。」",
+            quoteType: "quote", // 'quote' or 'journal'
             isMuted: false
         };
 
@@ -83,13 +85,13 @@
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     if (user) {
-                        document.getElementById('user-id-display').textContent = `ID: ${user.uid.substring(0,4)}`;
-                        updateStatusUI("連線成功", "text-emerald-400");
+                        document.getElementById('user-id-display').textContent = `UID: ${user.uid.substring(0,4)}`;
+                        updateStatusUI(true);
                         setupSync();
                     }
                 });
             } catch (error) {
-                updateStatusUI("連線重試中", "text-rose-400");
+                updateStatusUI(false);
                 setTimeout(init, 3000);
             }
         }
@@ -105,7 +107,7 @@
                     setDoc(docRef, defaultData);
                 }
             }, (err) => {
-                updateStatusUI("同步受限", "text-amber-400");
+                updateStatusUI(false);
             });
         }
 
@@ -120,6 +122,11 @@
             document.getElementById('homework-list').textContent = appData.homework;
             document.getElementById('important-note').textContent = appData.important;
             document.getElementById('quote-display').textContent = appData.quote;
+            
+            // 處理佳句/札記標題
+            const qTitle = document.getElementById('quote-title');
+            const typeLabel = appData.quoteType === 'journal' ? '今日札記' : '今日佳句';
+            qTitle.innerHTML = `<i class="fas ${appData.quoteType === 'journal' ? 'fa-pen-fancy' : 'fa-quote-left'} mr-2"></i> ${typeLabel}`;
 
             const mContent = document.getElementById('marquee-content');
             const speed = appData.marqueeSpeed || "25s";
@@ -129,23 +136,25 @@
             const container = document.getElementById('missing-container');
             container.innerHTML = '';
             if (!appData.missing || appData.missing.length === 0) {
-                container.innerHTML = '<div class="h-full flex items-center justify-center text-emerald-400 font-bold opacity-40">全部交齊了</div>';
+                container.innerHTML = '<div class="h-full py-10 flex items-center justify-center text-emerald-400 font-black opacity-30 text-xl tracking-widest uppercase">No Missing Data</div>';
             } else {
                 appData.missing.forEach((item, idx) => {
                     const card = document.createElement('div');
-                    card.className = "bg-slate-800/40 p-2 rounded-xl border border-white/5 mb-2";
+                    card.className = "bg-white/5 backdrop-blur-sm p-3 rounded-2xl border border-white/10 mb-2 shadow-inner";
                     card.innerHTML = `
-                        <div class="text-orange-300 font-bold mb-1 flex justify-between items-center text-sm">
-                            <span>${item.subject}</span>
-                        </div>
-                        <div class="flex flex-wrap gap-1.5">
-                            ${item.students.map((s, sIdx) => `
-                                <button onclick="toggleStudent('${idx}', '${sIdx}')" 
-                                    class="w-8 h-8 rounded-lg font-black text-sm transition-all border 
-                                    ${s.done ? 'bg-slate-700/50 border-transparent opacity-20 line-through' : 'bg-orange-500/20 border-orange-500/50 text-orange-100 active:scale-90 shadow-sm'}">
-                                    ${s.id}
-                                </button>
-                            `).join('')}
+                        <div class="flex items-start gap-4">
+                            <div class="text-orange-300 font-black text-base shrink-0 pt-1 w-14 border-r border-white/10">
+                                ${item.subject}
+                            </div>
+                            <div class="flex flex-wrap gap-2 flex-1">
+                                ${item.students.map((s, sIdx) => `
+                                    <button onclick="toggleStudent('${idx}', '${sIdx}')" 
+                                        class="w-10 h-10 rounded-xl font-black text-sm transition-all border 
+                                        ${s.done ? 'bg-white/5 border-transparent opacity-10 line-through text-slate-500' : 'bg-orange-500/30 border-orange-500/50 text-white active:scale-90 shadow-[0_0_10px_rgba(249,115,22,0.1)]'}">
+                                        ${s.id}
+                                    </button>
+                                `).join('')}
+                            </div>
                         </div>
                     `;
                     container.appendChild(card);
@@ -222,7 +231,7 @@
             let count = 0;
             const end = 15;
             const interval = setInterval(() => {
-                const num = Math.floor(Math.random() * 25) + 1;
+                const num = Math.floor(Math.random() * 25) + 1; 
                 el.textContent = num.toString().padStart(2, '0');
                 playSound(440, 'sine', 0.05, 0.05); 
                 count++;
@@ -238,6 +247,14 @@
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-help').textContent = help;
             
+            const quoteSelector = document.getElementById('quote-selector-container');
+            if (field === 'quote') {
+                quoteSelector.classList.remove('hidden');
+                setQuoteType(appData.quoteType || 'quote');
+            } else {
+                quoteSelector.classList.add('hidden');
+            }
+
             let val = appData[field];
             if (field === 'missing') {
                 val = (appData.missing || []).map(g => `${g.subject}：${g.students.map(s => s.id).join(', ')}`).join('\n');
@@ -250,6 +267,19 @@
             document.getElementById('modal-input').value = val || "";
             document.getElementById('modal').classList.remove('hidden');
             document.getElementById('modal').classList.add('flex');
+        };
+
+        window.setQuoteType = (type) => {
+            selectedQuoteType = type;
+            const btnQuote = document.getElementById('btn-type-quote');
+            const btnJournal = document.getElementById('btn-type-journal');
+            if (type === 'quote') {
+                btnQuote.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400';
+                btnJournal.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50';
+            } else {
+                btnJournal.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400';
+                btnQuote.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50';
+            }
         };
 
         window.closeEdit = () => {
@@ -274,14 +304,24 @@
                     const [sub, ids] = line.split(/[：:]/);
                     return { subject: sub.trim(), students: ids.split(/[,，\s]+/).filter(i => i).map(id => ({ id: id.trim().padStart(2, '0'), done: false })) };
                 });
+            } else if (window.currentField === 'quote') {
+                update.quote = val;
+                update.quoteType = selectedQuoteType;
             } else { update[window.currentField] = val; }
             window.saveData(update);
             closeEdit();
         };
 
-        function updateStatusUI(msg, color) {
+        function updateStatusUI(isOk) {
+            const dot = document.getElementById('sync-status-dot');
             const text = document.getElementById('sync-status-text');
-            if (text) { text.textContent = msg; text.className = `font-bold ${color}`; }
+            if (dot) {
+                dot.className = isOk ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse' : 'w-1.5 h-1.5 rounded-full bg-rose-500';
+            }
+            if (text) {
+                text.textContent = isOk ? "ONLINE" : "OFFLINE";
+                text.className = isOk ? "text-[8px] text-emerald-500/80 font-black" : "text-[8px] text-rose-500/80 font-black";
+            }
         }
 
         window.onload = () => {
@@ -297,172 +337,214 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         
-        /* 防止網頁出現全域捲軸，強迫全螢幕 */
         html, body { 
             height: 100%; 
             margin: 0; 
             padding: 0; 
             overflow: hidden; 
             font-family: 'Noto Sans TC', sans-serif;
-            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            background: radial-gradient(circle at top right, #1a1e3b, #070912);
             color: white;
         }
         
         body { 
             display: flex;
             flex-direction: column;
-            padding: 1rem;
+            padding: 0.75rem;
             box-sizing: border-box;
+            gap: 0.5rem;
         }
 
-        .glass { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); }
-        .editable { transition: all 0.2s; cursor: pointer; }
-        .editable:hover { background: rgba(255, 255, 255, 0.05); }
+        /* 標題設計感 */
+        .title-gradient {
+            background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 50%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(129, 140, 248, 0.3);
+        }
+
+        .glass { 
+            background: rgba(255, 255, 255, 0.04); 
+            backdrop-filter: blur(16px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(255,255,255,0.02);
+            border-radius: 1.5rem;
+        }
+
+        .countdown-glass {
+            background: rgba(255, 255, 255, 0.08); 
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 0.5rem 1.25rem;
+            border-radius: 1.25rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .editable { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        .editable:hover { background: rgba(255, 255, 255, 0.08); transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.25); }
         
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .animate-marquee { display: inline-block; white-space: nowrap; }
         .font-num { font-family: 'Consolas', 'Monaco', monospace; }
         
-        /* 捲軸樣式優化 */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         
-        /* 手機版適應：手機不固定高度，允許滑動 */
         @media (max-width: 1023px) {
             html, body { overflow-y: auto; height: auto; }
-            body { display: block; }
-            main { display: block; margin-top: 1rem; margin-bottom: 1rem; }
-            section { margin-bottom: 1rem; min-height: 300px; }
-            footer { padding-bottom: 1rem; }
+            body { gap: 0.75rem; padding: 0.5rem; }
+            main { display: flex; flex-direction: column; gap: 0.75rem; }
+            section { min-height: 280px; }
         }
     </style>
 </head>
-<body class="space-y-4">
+<body class="space-y-2">
 
     <!-- 編輯彈窗 -->
-    <div id="modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[100] hidden items-center justify-center p-4">
-        <div class="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[2rem] p-6 shadow-2xl">
-            <h3 id="modal-title" class="text-xl font-black mb-1 text-indigo-400">編輯內容</h3>
-            <p id="modal-help" class="text-slate-500 text-[10px] mb-4 whitespace-pre-wrap"></p>
-            <textarea id="modal-input" class="w-full h-48 bg-slate-800 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg mb-6 resize-none"></textarea>
+    <div id="modal" class="fixed inset-0 bg-black/90 backdrop-blur-3xl z-[100] hidden items-center justify-center p-4">
+        <div class="bg-slate-900/90 border border-white/20 w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative">
+            <h3 id="modal-title" class="text-2xl font-black mb-1 text-indigo-400">編輯內容</h3>
+            <p id="modal-help" class="text-slate-500 text-[11px] mb-4 whitespace-pre-wrap"></p>
+            
+            <!-- 佳句/札記切換按鈕 -->
+            <div id="quote-selector-container" class="hidden mb-4 flex gap-2">
+                <button id="btn-type-quote" onclick="setQuoteType('quote')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日佳句</button>
+                <button id="btn-type-journal" onclick="setQuoteType('journal')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日札記</button>
+            </div>
+
+            <textarea id="modal-input" class="w-full h-48 bg-black/60 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg mb-6 resize-none shadow-inner"></textarea>
+            
             <div class="flex gap-4">
-                <button onclick="closeEdit()" class="flex-1 py-4 bg-slate-800 rounded-xl font-bold">取消</button>
-                <button onclick="confirmEdit()" class="flex-1 py-4 bg-indigo-600 rounded-xl font-bold">儲存</button>
+                <button onclick="closeEdit()" class="flex-1 py-4 bg-white/5 rounded-2xl font-bold hover:bg-white/10 transition-colors">取消</button>
+                <button onclick="confirmEdit()" class="flex-1 py-4 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all">儲存變更</button>
             </div>
         </div>
     </div>
 
-    <!-- Header (永遠置頂) -->
-    <header class="glass rounded-[1.5rem] p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
-        <div class="flex items-center space-x-4">
-            <div class="w-10 h-10 bg-indigo-600 flex items-center justify-center rounded-xl shrink-0">
-                <i class="fas fa-desktop text-white"></i>
+    <!-- Header -->
+    <header class="py-1 px-6 flex flex-col md:flex-row justify-between items-center gap-2 shrink-0">
+        <div class="flex items-center space-x-5">
+            <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center rounded-2xl shrink-0 shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                <i class="fas fa-desktop text-white text-xl"></i>
             </div>
             <div>
-                <div class="flex items-center gap-2">
-                    <h1 class="text-xl font-black">九年八班 <span class="hidden sm:inline">數位看板</span></h1>
-                    <div class="bg-black/20 px-2 py-0.5 rounded-full border border-white/5 flex items-center gap-1">
-                        <span id="sync-status-text" class="text-[8px]">連線中</span>
-                        <span id="user-id-display" class="text-[8px] text-slate-500 font-mono">...</span>
+                <div class="flex items-center gap-3">
+                    <div class="flex flex-col">
+                        <h1 class="text-2xl font-black tracking-tighter title-gradient leading-none">九年八班</h1>
+                        <span class="text-[10px] font-black tracking-[0.2em] text-indigo-400 uppercase opacity-80">Digital Information Board</span>
+                    </div>
+                    <div class="bg-white/5 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-2">
+                        <div id="sync-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></div>
+                        <span id="sync-status-text" class="text-[8px] text-slate-500 font-black tracking-widest uppercase">READING</span>
+                        <span id="user-id-display" class="text-[8px] text-slate-500 font-mono hidden sm:inline opacity-40">...</span>
                     </div>
                 </div>
-                <div id="date-display" class="text-slate-500 font-bold text-[9px] tracking-widest uppercase">載入中...</div>
+                <div id="date-display" class="text-white font-black text-sm tracking-widest mt-1">載入中...</div>
             </div>
         </div>
 
-        <div class="flex items-center gap-4 w-full md:w-auto justify-between">
-            <div class="flex gap-4 text-center">
-                <div>
-                    <div class="text-[7px] text-yellow-500 font-bold uppercase">段考</div>
-                    <div class="text-xl font-num font-black text-yellow-400" id="exam-countdown">--</div>
+        <div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+            <div class="flex gap-3 text-center">
+                <div class="countdown-glass min-w-[80px]">
+                    <div class="text-[9px] text-yellow-500 font-black tracking-widest uppercase mb-0.5 opacity-80">段考</div>
+                    <div class="text-4xl font-num font-black text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.5)]" id="exam-countdown">--</div>
                 </div>
-                <div class="border-l border-white/10 pl-4">
-                    <div class="text-[7px] text-emerald-400 font-bold uppercase">模考</div>
-                    <div class="text-xl font-num font-black text-emerald-400" id="mock-countdown">--</div>
+                <div class="countdown-glass min-w-[80px]">
+                    <div class="text-[9px] text-emerald-400 font-black tracking-widest uppercase mb-0.5 opacity-80">模考</div>
+                    <div class="text-4xl font-num font-black text-emerald-400 drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]" id="mock-countdown">--</div>
                 </div>
-                <div class="border-l border-white/10 pl-4">
-                    <div class="text-[7px] text-orange-500 font-bold uppercase">會考</div>
-                    <div class="text-xl font-num font-black text-orange-500" id="final-countdown">--</div>
+                <div class="countdown-glass min-w-[80px]">
+                    <div class="text-[9px] text-orange-500 font-black tracking-widest uppercase mb-0.5 opacity-80">會考</div>
+                    <div class="text-4xl font-num font-black text-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.5)]" id="final-countdown">--</div>
                 </div>
             </div>
-            <div id="clock-display" class="text-2xl md:text-3xl font-num font-black text-white border-l border-white/10 pl-4 ml-2">00:00:00</div>
+            <div id="clock-display" class="text-4xl md:text-6xl font-num font-black text-white/95 ml-4 tracking-tighter">00:00:00</div>
         </div>
     </header>
 
-    <!-- 跑馬燈 (永遠置頂) -->
-    <div class="bg-rose-600 rounded-xl h-10 flex items-center overflow-hidden shadow-lg shrink-0">
-        <button onclick="toggleMarqueeSpeed(event)" class="bg-rose-700 h-full px-4 flex items-center z-10 border-r border-rose-500/50">
-            <span id="speed-label" class="text-[9px] font-black uppercase">一般</span>
+    <!-- 跑馬燈 -->
+    <div class="bg-gradient-to-r from-rose-600 via-rose-500 to-rose-600 h-14 flex items-center overflow-hidden shadow-2xl shrink-0 border-y border-rose-400/40">
+        <button onclick="toggleMarqueeSpeed(event)" class="bg-black/30 h-full px-5 flex items-center z-10 border-r border-white/10 hover:bg-black/50 transition-all group">
+            <span id="speed-label" class="text-[10px] font-black uppercase tracking-tighter group-hover:scale-110 transition-transform">一般</span>
         </button>
         <div class="flex-1 overflow-hidden cursor-pointer" onclick="openEdit('marquee', '跑馬燈公告')">
-            <div id="marquee-content" class="animate-marquee font-bold text-sm">載入中...</div>
+            <div id="marquee-content" class="animate-marquee font-black text-2xl tracking-wide drop-shadow-md">載入中...</div>
         </div>
     </div>
 
-    <!-- 主要內容區 (可捲動區塊) -->
+    <!-- 主要內容區 -->
     <main class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
-        <!-- 第一欄：聯絡事項 -->
+        <!-- 第一欄：今日聯絡簿 -->
+        <section class="flex flex-col min-h-0 h-full">
+            <div onclick="openEdit('homework', '今日聯絡簿')" class="glass p-7 flex-1 flex flex-col border-t-4 border-yellow-400/80 editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(250,204,21,0.05)]">
+                <h2 class="text-lg font-black text-yellow-400 mb-4 flex items-center shrink-0 uppercase tracking-widest"><i class="fas fa-edit mr-3"></i> 今日聯絡簿</h2>
+                <div id="homework-list" class="text-2xl font-bold leading-loose whitespace-pre-wrap overflow-y-auto flex-1 text-slate-100 pr-2 custom-scroll"></div>
+            </div>
+        </section>
+
+        <!-- 第二欄：重要提醒 + 佳句 -->
         <section class="flex flex-col space-y-4 min-h-0 h-full">
-            <div onclick="openEdit('homework', '作業與聯絡事項')" class="glass rounded-[2rem] p-6 flex-1 flex flex-col border-t-4 border-yellow-500 editable min-h-0">
-                <h2 class="text-base font-black text-yellow-400 mb-3 flex items-center shrink-0"><i class="fas fa-edit mr-3"></i> 聯絡事項</h2>
-                <div id="homework-list" class="text-lg font-bold leading-relaxed whitespace-pre-wrap overflow-y-auto pr-2 flex-1 text-slate-200"></div>
+            <!-- 重要提醒 -->
+            <div onclick="openEdit('important', '重要提醒')" class="glass p-7 flex-1 border-t-4 border-blue-400/80 flex flex-col editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(96,165,250,0.05)]">
+                <h2 class="text-lg font-black text-blue-400 mb-4 flex items-center shrink-0 uppercase tracking-widest"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
+                <div id="important-note" class="text-2xl font-bold leading-loose text-blue-50 whitespace-pre-wrap overflow-y-auto flex-1 pr-2 custom-scroll"></div>
             </div>
-            <div onclick="openEdit('quote', '今日佳句')" class="glass rounded-xl p-3 flex items-center space-x-3 editable border-l-4 border-indigo-400 shrink-0">
-                <i class="fas fa-quote-left text-indigo-400 text-xs opacity-40"></i>
-                <div id="quote-display" class="text-xs italic font-bold text-indigo-100 flex-1 leading-tight"></div>
+            <!-- 今日佳句 / 札記 -->
+            <div onclick="openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-7 h-56 flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group">
+                <h2 id="quote-title" class="text-xs font-black text-indigo-400/60 uppercase tracking-[0.3em] mb-4 self-start">今日佳句</h2>
+                <div class="w-full text-left opacity-20 group-hover:opacity-40 transition-opacity">
+                    <i class="fas fa-quote-left text-3xl text-white"></i>
+                </div>
+                <div id="quote-display" class="text-2xl italic font-black text-white text-center leading-relaxed px-6 drop-shadow-md"></div>
+                <div class="w-full text-right opacity-20 group-hover:opacity-40 transition-opacity">
+                    <i class="fas fa-quote-right text-3xl text-white"></i>
+                </div>
             </div>
         </section>
 
-        <!-- 第二欄：重要提醒 -->
-        <section onclick="openEdit('important', '重要提醒')" class="glass rounded-[2rem] p-6 border-t-4 border-blue-500 flex flex-col editable h-full min-h-0">
-            <h2 class="text-base font-black text-blue-400 mb-3 flex items-center shrink-0"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
-            <div id="important-note" class="text-lg font-bold leading-relaxed text-blue-50 whitespace-pre-wrap overflow-y-auto pr-2 flex-1"></div>
-        </section>
-
-        <!-- 第三欄：未交名單 (已優化行高間距) -->
-        <section class="glass rounded-[2rem] p-6 border-t-4 border-orange-500 flex flex-col h-full min-h-0">
-            <div class="flex justify-between items-center mb-3 shrink-0">
-                <h2 class="text-base font-black text-orange-400 flex items-center"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
-                <button onclick="openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="text-[8px] bg-white/10 px-2 py-1 rounded-lg font-bold">編輯</button>
+        <!-- 第三欄：未交名單 -->
+        <section class="glass p-7 border-t-4 border-orange-400/80 flex flex-col h-full min-h-0 overflow-hidden shadow-[0_0_50px_rgba(251,146,60,0.05)]">
+            <div class="flex justify-between items-center mb-5 shrink-0">
+                <h2 class="text-lg font-black text-orange-400 flex items-center uppercase tracking-widest"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
+                <button onclick="openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="text-[10px] bg-white/10 px-4 py-2 rounded-xl font-black hover:bg-white/20 transition-all border border-white/5 uppercase">Edit List</button>
             </div>
-            <div id="missing-container" class="flex-1 overflow-y-auto pr-1"></div>
+            <div id="missing-container" class="flex-1 overflow-y-auto pr-2 custom-scroll"></div>
         </section>
     </main>
 
-    <!-- Footer (永遠置底) -->
+    <!-- Footer -->
     <footer class="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <div class="glass rounded-xl p-3 flex items-center justify-between overflow-hidden relative">
+        <div class="glass rounded-2xl p-4 flex items-center justify-between overflow-hidden relative group">
             <div class="z-10">
-                <p class="text-indigo-400 text-[8px] font-black uppercase mb-0.5">Lucky</p>
-                <div id="lucky-num" class="text-2xl font-num font-black">??</div>
+                <p class="text-indigo-400 text-[9px] font-black uppercase mb-1 tracking-[0.2em] opacity-80">Lucky (1-25)</p>
+                <div id="lucky-num" class="text-3xl font-num font-black text-white drop-shadow-lg">??</div>
             </div>
-            <button onclick="spinLucky()" class="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center z-10 active:scale-90 transition-transform"><i class="fas fa-dice"></i></button>
-            <div class="absolute -right-2 -bottom-2 text-white/5 text-4xl font-black rotate-12">抽</div>
+            <button onclick="spinLucky()" class="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center z-10 active:scale-90 transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500"><i class="fas fa-dice text-xl"></i></button>
+            <div class="absolute -right-2 -bottom-2 text-white/5 text-5xl font-black rotate-12 group-hover:rotate-0 transition-transform">抽</div>
         </div>
 
-        <div class="glass rounded-xl p-3 flex items-center justify-between">
+        <div class="glass rounded-2xl p-4 flex items-center justify-between">
             <div>
-                <div class="flex items-center gap-2 mb-0.5">
-                    <p class="text-emerald-400 text-[8px] font-black uppercase">Timer</p>
-                    <button onclick="window.saveData({isMuted: !appData.isMuted})"><i id="mute-icon" class="fas fa-volume-up text-[8px]"></i></button>
+                <div class="flex items-center gap-3 mb-1">
+                    <p class="text-emerald-400 text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Timer</p>
+                    <button onclick="window.saveData({isMuted: !appData.isMuted})" class="hover:scale-110 transition-transform"><i id="mute-icon" class="fas fa-volume-up text-[10px]"></i></button>
                 </div>
                 <div id="timer-display" onclick="openEdit('timer', '設定計時器', '分:秒')" 
-                     class="text-2xl font-num font-black text-emerald-400 cursor-pointer">05:00</div>
+                     class="text-3xl font-num font-black text-emerald-400 cursor-pointer drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] hover:text-emerald-300 transition-colors">05:00</div>
             </div>
-            <div class="flex flex-col gap-1">
-                <button id="timer-btn" onclick="toggleTimer()" class="bg-emerald-600 px-3 py-0.5 rounded-md font-bold text-[8px]">開始</button>
-                <button onclick="resetTimer()" class="bg-slate-700/50 px-3 py-0.5 rounded-md font-bold text-[8px]">重置</button>
+            <div class="flex flex-col gap-1.5">
+                <button id="timer-btn" onclick="toggleTimer()" class="bg-emerald-600 px-4 py-1.5 rounded-lg font-black text-[10px] hover:bg-emerald-500 shadow-lg shadow-emerald-900/20">開始</button>
+                <button onclick="resetTimer()" class="bg-white/10 px-4 py-1.5 rounded-lg font-black text-[10px] hover:bg-white/20 transition-colors">重置</button>
             </div>
         </div>
 
-        <a href="https://padlet.com/teacher133_5/padlet-rmnqtuy0xqgy53qh" target="_blank" class="glass rounded-xl p-3 flex items-center space-x-3 hover:bg-indigo-600/20 active:scale-95 transition-all shrink-0">
-            <div class="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center text-indigo-400"><i class="fas fa-clipboard-list"></i></div>
-            <span class="font-bold text-[10px]">908電子布告欄</span>
+        <a href="https://padlet.com/teacher133_5/padlet-rmnqtuy0xqgy53qh" target="_blank" class="glass rounded-2xl p-4 flex items-center space-x-4 hover:bg-white/10 active:scale-95 transition-all shrink-0 group">
+            <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-300 shrink-0 group-hover:bg-indigo-500/40 transition-all"><i class="fas fa-clipboard-list text-2xl"></i></div>
+            <span class="font-black text-lg text-white tracking-wide">908電子布告欄</span>
         </a>
 
-        <a href="https://www.ycjh.hlc.edu.tw/" target="_blank" class="glass rounded-xl p-3 flex items-center space-x-3 hover:bg-emerald-600/20 active:scale-95 transition-all shrink-0">
-            <div class="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400"><i class="fas fa-globe"></i></div>
-            <span class="font-bold text-[10px]">宜昌國中官網</span>
+        <a href="https://www.ycjh.hlc.edu.tw/" target="_blank" class="glass rounded-2xl p-4 flex items-center space-x-4 hover:bg-white/10 active:scale-95 transition-all shrink-0 group">
+            <div class="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-300 shrink-0 group-hover:bg-emerald-500/40 transition-all"><i class="fas fa-globe text-2xl"></i></div>
+            <span class="font-black text-lg text-white tracking-wide">宜昌國中官網</span>
         </a>
     </footer>
 
