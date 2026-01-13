@@ -133,16 +133,16 @@
             } else {
                 appData.missing.forEach((item, idx) => {
                     const card = document.createElement('div');
-                    card.className = "bg-slate-800/60 p-4 rounded-xl border border-white/5 mb-3";
+                    card.className = "bg-slate-800/40 p-2 rounded-xl border border-white/5 mb-2";
                     card.innerHTML = `
-                        <div class="text-orange-300 font-bold mb-2 flex justify-between items-center text-base">
+                        <div class="text-orange-300 font-bold mb-1 flex justify-between items-center text-sm">
                             <span>${item.subject}</span>
                         </div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-1.5">
                             ${item.students.map((s, sIdx) => `
                                 <button onclick="toggleStudent('${idx}', '${sIdx}')" 
-                                    class="w-10 h-10 rounded-lg font-black text-base transition-all border 
-                                    ${s.done ? 'bg-slate-700/50 border-transparent opacity-20 line-through' : 'bg-orange-500/20 border-orange-500/50 text-orange-100 active:scale-90 shadow-lg'}">
+                                    class="w-8 h-8 rounded-lg font-black text-sm transition-all border 
+                                    ${s.done ? 'bg-slate-700/50 border-transparent opacity-20 line-through' : 'bg-orange-500/20 border-orange-500/50 text-orange-100 active:scale-90 shadow-sm'}">
                                     ${s.id}
                                 </button>
                             `).join('')}
@@ -296,30 +296,48 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background: radial-gradient(circle at top right, #1e293b, #0f172a); color: white; height: 100vh; overflow-x: hidden; }
+        
+        /* 防止網頁出現全域捲軸，強迫全螢幕 */
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            font-family: 'Noto Sans TC', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: white;
+        }
+        
+        body { 
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
         .glass { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); }
         .editable { transition: all 0.2s; cursor: pointer; }
         .editable:hover { background: rgba(255, 255, 255, 0.05); }
+        
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .animate-marquee { display: inline-block; white-space: nowrap; }
         .font-num { font-family: 'Consolas', 'Monaco', monospace; }
+        
+        /* 捲軸樣式優化 */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         
-        /* 手機版優化：高度自動適應 */
+        /* 手機版適應：手機不固定高度，允許滑動 */
         @media (max-width: 1023px) {
-            body { height: auto; overflow-y: auto; }
-            main { height: auto; }
-            .section-card { min-height: 250px; margin-bottom: 1rem; }
-        }
-
-        /* 電腦版優化：強制三欄等高且撐滿螢幕 */
-        @media (min-width: 1024px) {
-            main { height: calc(100vh - 280px); } /* 扣除 Header, Marquee, Footer 的高度 */
+            html, body { overflow-y: auto; height: auto; }
+            body { display: block; }
+            main { display: block; margin-top: 1rem; margin-bottom: 1rem; }
+            section { margin-bottom: 1rem; min-height: 300px; }
+            footer { padding-bottom: 1rem; }
         }
     </style>
 </head>
-<body class="p-4 flex flex-col space-y-4">
+<body class="space-y-4">
 
     <!-- 編輯彈窗 -->
     <div id="modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[100] hidden items-center justify-center p-4">
@@ -334,15 +352,15 @@
         </div>
     </div>
 
-    <!-- Header -->
-    <header class="glass rounded-[1.5rem] p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+    <!-- Header (永遠置頂) -->
+    <header class="glass rounded-[1.5rem] p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
         <div class="flex items-center space-x-4">
             <div class="w-10 h-10 bg-indigo-600 flex items-center justify-center rounded-xl shrink-0">
                 <i class="fas fa-desktop text-white"></i>
             </div>
             <div>
                 <div class="flex items-center gap-2">
-                    <h1 class="text-xl font-black">九年八班 <span class="hidden sm:inline">數位資訊看板</span></h1>
+                    <h1 class="text-xl font-black">九年八班 <span class="hidden sm:inline">數位看板</span></h1>
                     <div class="bg-black/20 px-2 py-0.5 rounded-full border border-white/5 flex items-center gap-1">
                         <span id="sync-status-text" class="text-[8px]">連線中</span>
                         <span id="user-id-display" class="text-[8px] text-slate-500 font-mono">...</span>
@@ -371,7 +389,7 @@
         </div>
     </header>
 
-    <!-- 跑馬燈 -->
+    <!-- 跑馬燈 (永遠置頂) -->
     <div class="bg-rose-600 rounded-xl h-10 flex items-center overflow-hidden shadow-lg shrink-0">
         <button onclick="toggleMarqueeSpeed(event)" class="bg-rose-700 h-full px-4 flex items-center z-10 border-r border-rose-500/50">
             <span id="speed-label" class="text-[9px] font-black uppercase">一般</span>
@@ -381,12 +399,12 @@
         </div>
     </div>
 
-    <!-- 主要內容區：電腦版三欄並排 (lg:grid-cols-3) -->
+    <!-- 主要內容區 (可捲動區塊) -->
     <main class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
         <!-- 第一欄：聯絡事項 -->
-        <section class="flex flex-col space-y-4 min-h-0 section-card">
-            <div onclick="openEdit('homework', '作業與聯絡事項')" class="glass rounded-[2rem] p-6 flex-1 flex flex-col border-t-4 border-yellow-500 editable">
-                <h2 class="text-base font-black text-yellow-400 mb-3 flex items-center"><i class="fas fa-edit mr-3"></i> 聯絡事項</h2>
+        <section class="flex flex-col space-y-4 min-h-0 h-full">
+            <div onclick="openEdit('homework', '作業與聯絡事項')" class="glass rounded-[2rem] p-6 flex-1 flex flex-col border-t-4 border-yellow-500 editable min-h-0">
+                <h2 class="text-base font-black text-yellow-400 mb-3 flex items-center shrink-0"><i class="fas fa-edit mr-3"></i> 聯絡事項</h2>
                 <div id="homework-list" class="text-lg font-bold leading-relaxed whitespace-pre-wrap overflow-y-auto pr-2 flex-1 text-slate-200"></div>
             </div>
             <div onclick="openEdit('quote', '今日佳句')" class="glass rounded-xl p-3 flex items-center space-x-3 editable border-l-4 border-indigo-400 shrink-0">
@@ -396,14 +414,14 @@
         </section>
 
         <!-- 第二欄：重要提醒 -->
-        <section onclick="openEdit('important', '重要提醒')" class="glass rounded-[2rem] p-6 border-t-4 border-blue-500 flex flex-col editable section-card">
-            <h2 class="text-base font-black text-blue-400 mb-3 flex items-center"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
-            <div id="important-note" class="text-lg font-bold leading-relaxed text-blue-50 whitespace-pre-wrap overflow-y-auto flex-1"></div>
+        <section onclick="openEdit('important', '重要提醒')" class="glass rounded-[2rem] p-6 border-t-4 border-blue-500 flex flex-col editable h-full min-h-0">
+            <h2 class="text-base font-black text-blue-400 mb-3 flex items-center shrink-0"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
+            <div id="important-note" class="text-lg font-bold leading-relaxed text-blue-50 whitespace-pre-wrap overflow-y-auto pr-2 flex-1"></div>
         </section>
 
-        <!-- 第三欄：未交名單 -->
-        <section class="glass rounded-[2rem] p-6 border-t-4 border-orange-500 flex flex-col section-card">
-            <div class="flex justify-between items-center mb-3">
+        <!-- 第三欄：未交名單 (已優化行高間距) -->
+        <section class="glass rounded-[2rem] p-6 border-t-4 border-orange-500 flex flex-col h-full min-h-0">
+            <div class="flex justify-between items-center mb-3 shrink-0">
                 <h2 class="text-base font-black text-orange-400 flex items-center"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
                 <button onclick="openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="text-[8px] bg-white/10 px-2 py-1 rounded-lg font-bold">編輯</button>
             </div>
@@ -411,7 +429,7 @@
         </section>
     </main>
 
-    <!-- Footer -->
+    <!-- Footer (永遠置底) -->
     <footer class="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <div class="glass rounded-xl p-3 flex items-center justify-between overflow-hidden relative">
             <div class="z-10">
