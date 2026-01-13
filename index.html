@@ -26,7 +26,11 @@
         let db, auth, user;
         let timerInterval = null;
         let timerSeconds = 300; 
-        let selectedQuoteType = 'quote'; // 預設類別
+        let selectedQuoteType = 'quote'; 
+
+        // 全域管理變數
+        window.isAdmin = false; 
+        const ADMIN_PASSWORD = "908"; 
 
         const DATES = { 
             exam: "2026-01-21", 
@@ -35,17 +39,19 @@
         };
 
         const defaultData = {
-            marquee: "九年八班數位看板已連線！點擊各區塊即可編輯內容。",
+            marquee: "九年八班數位看板已連線！管理員請點擊標題開啟編輯權限。",
             marqueeSpeed: "25s",
             homework: "1. 國文講義 P.35-P.40\n2. 英文單字 L5 小考\n3. 數學習作 3-1 完工",
             missing: [{ subject: "數學", students: [{id: "01", done: false}] }],
             important: "1. 記得帶環保餐具。\n2. 明天早自習測驗。",
             quote: "「努力不一定成功，但不努力一定很輕鬆。」",
-            quoteType: "quote", // 'quote' or 'journal'
+            quoteType: "quote", 
             isMuted: false
         };
 
         let appData = { ...defaultData };
+
+        // --- 功能函數 ---
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(freq, type, duration, vol = 0.1) {
@@ -61,6 +67,95 @@
             osc.start();
             osc.stop(audioCtx.currentTime + duration);
         }
+
+        function updateCountdowns() {
+            const calc = (dateStr) => {
+                const target = new Date(dateStr).setHours(0,0,0,0);
+                const now = new Date().setHours(0,0,0,0);
+                const diff = Math.ceil((target - now) / 86400000);
+                return diff < 0 ? 0 : diff;
+            };
+            const examEl = document.getElementById('exam-countdown');
+            const mockEl = document.getElementById('mock-countdown');
+            const finalEl = document.getElementById('final-countdown');
+            if (examEl) examEl.textContent = calc(DATES.exam);
+            if (mockEl) mockEl.textContent = calc(DATES.mock);
+            if (finalEl) finalEl.textContent = calc(DATES.final);
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+            const s = (timerSeconds % 60).toString().padStart(2, '0');
+            const el = document.getElementById('timer-display');
+            if (el) el.textContent = `${m}:${s}`;
+        }
+
+        function renderBoard() {
+            document.getElementById('marquee-content').textContent = appData.marquee;
+            document.getElementById('homework-list').textContent = appData.homework;
+            document.getElementById('important-note').textContent = appData.important;
+            document.getElementById('quote-display').textContent = appData.quote;
+            
+            const lockIcon = document.getElementById('lock-status-icon');
+            const editBtnMissing = document.getElementById('btn-edit-missing');
+            const mainContainer = document.body;
+
+            // 處理鎖定狀態與 UI 顯示
+            if (window.isAdmin) {
+                lockIcon.className = "fas fa-unlock text-emerald-400 ml-1 drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]";
+                if(editBtnMissing) editBtnMissing.classList.remove('hidden');
+                mainContainer.classList.add('admin-active');
+            } else {
+                lockIcon.className = "fas fa-lock text-slate-500 ml-1";
+                if(editBtnMissing) editBtnMissing.classList.add('hidden');
+                mainContainer.classList.remove('admin-active');
+            }
+
+            const qTitle = document.getElementById('quote-title');
+            const typeLabel = appData.quoteType === 'journal' ? '今日札記' : '今日佳句';
+            qTitle.innerHTML = `<i class="fas ${appData.quoteType === 'journal' ? 'fa-pen-fancy' : 'fa-quote-left'} mr-2"></i> ${typeLabel}`;
+
+            const mContent = document.getElementById('marquee-content');
+            const speed = appData.marqueeSpeed || "25s";
+            document.getElementById('speed-label').textContent = speed === "0s" ? "靜止" : speed === "40s" ? "慢" : speed === "15s" ? "快" : "一般";
+            mContent.style.animation = speed === "0s" ? "none" : `marquee ${speed} linear infinite`;
+
+            const container = document.getElementById('missing-container');
+            container.innerHTML = '';
+            if (!appData.missing || appData.missing.length === 0) {
+                container.innerHTML = '<div class="h-full py-10 flex items-center justify-center text-emerald-400 font-black opacity-20 text-xl tracking-widest uppercase text-center">No Missing Data</div>';
+            } else {
+                appData.missing.forEach((item, idx) => {
+                    const card = document.createElement('div');
+                    card.className = "bg-white/5 backdrop-blur-sm p-3 rounded-2xl border border-white/10 mb-2 shadow-inner";
+                    card.innerHTML = `
+                        <div class="flex items-start gap-4">
+                            <div class="text-orange-300 font-black text-base shrink-0 pt-1 w-14 border-r border-white/10">
+                                ${item.subject}
+                            </div>
+                            <div class="flex flex-wrap gap-2 flex-1">
+                                ${item.students.map((s, sIdx) => `
+                                    <button onclick="window.isAdmin && window.toggleStudent('${idx}', '${sIdx}')" 
+                                        class="w-10 h-10 rounded-xl font-black text-sm transition-all border 
+                                        ${s.done ? 'bg-white/5 border-transparent opacity-10 line-through text-slate-500' : 'bg-orange-500/30 border-orange-500/50 text-white active:scale-90 shadow-[0_0_10px_rgba(249,115,22,0.1)]'}
+                                        ${!window.isAdmin ? 'cursor-default pointer-events-none' : 'hover:scale-110 active:scale-95'}">
+                                        ${s.id}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            updateCountdowns();
+            const muteIcon = document.getElementById('mute-icon');
+            if (muteIcon) muteIcon.className = appData.isMuted ? 'fas fa-volume-mute text-rose-400' : 'fas fa-volume-up text-emerald-400';
+            updateTimerDisplay();
+        }
+
+        // --- Firebase 通訊 ---
 
         async function init() {
             try {
@@ -111,86 +206,143 @@
             });
         }
 
+        function updateStatusUI(isOk) {
+            const dot = document.getElementById('sync-status-dot');
+            const text = document.getElementById('sync-status-text');
+            if (dot) {
+                dot.className = isOk ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse' : 'w-1.5 h-1.5 rounded-full bg-rose-500';
+            }
+            if (text) {
+                text.textContent = isOk ? "ONLINE" : "OFFLINE";
+                text.className = isOk ? "text-[8px] text-emerald-500/80 font-black" : "text-[8px] text-rose-500/80 font-black";
+            }
+        }
+
+        // --- 全域功能掛載 ---
+
         window.saveData = async (update) => {
-            if (!user) return;
+            // 特別開放：靜音功能不檢查 isAdmin (或是您可以選擇保留鎖定)
+            const isOnlyMute = Object.keys(update).length === 1 && update.hasOwnProperty('isMuted');
+            if (!user || (!window.isAdmin && !isOnlyMute)) return; 
+            
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boardConfig', 'main');
             try { await updateDoc(docRef, update); } catch (e) { await setDoc(docRef, update, { merge: true }); }
         };
 
-        function renderBoard() {
-            document.getElementById('marquee-content').textContent = appData.marquee;
-            document.getElementById('homework-list').textContent = appData.homework;
-            document.getElementById('important-note').textContent = appData.important;
-            document.getElementById('quote-display').textContent = appData.quote;
-            
-            // 處理佳句/札記標題
-            const qTitle = document.getElementById('quote-title');
-            const typeLabel = appData.quoteType === 'journal' ? '今日札記' : '今日佳句';
-            qTitle.innerHTML = `<i class="fas ${appData.quoteType === 'journal' ? 'fa-pen-fancy' : 'fa-quote-left'} mr-2"></i> ${typeLabel}`;
+        window.openAdminLogin = () => {
+            if (window.isAdmin) {
+                document.getElementById('admin-logout-modal').classList.remove('hidden');
+                document.getElementById('admin-logout-modal').classList.add('flex');
+                return;
+            }
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+            document.getElementById('admin-login-modal').classList.add('flex');
+            const input = document.getElementById('admin-pass-input');
+            if(input) input.focus();
+        };
 
-            const mContent = document.getElementById('marquee-content');
-            const speed = appData.marqueeSpeed || "25s";
-            document.getElementById('speed-label').textContent = speed === "0s" ? "靜止" : speed === "40s" ? "慢" : speed === "15s" ? "快" : "一般";
-            mContent.style.animation = speed === "0s" ? "none" : `marquee ${speed} linear infinite`;
+        window.closeAdminLogin = () => {
+            document.getElementById('admin-login-modal').classList.add('hidden');
+            document.getElementById('admin-login-modal').classList.remove('flex');
+            const input = document.getElementById('admin-pass-input');
+            if(input) input.value = "";
+        };
 
-            const container = document.getElementById('missing-container');
-            container.innerHTML = '';
-            if (!appData.missing || appData.missing.length === 0) {
-                container.innerHTML = '<div class="h-full py-10 flex items-center justify-center text-emerald-400 font-black opacity-30 text-xl tracking-widest uppercase">No Missing Data</div>';
+        window.handleAdminLogin = () => {
+            const val = document.getElementById('admin-pass-input').value;
+            if (val === ADMIN_PASSWORD) {
+                window.isAdmin = true;
+                renderBoard();
+                window.closeAdminLogin();
             } else {
-                appData.missing.forEach((item, idx) => {
-                    const card = document.createElement('div');
-                    card.className = "bg-white/5 backdrop-blur-sm p-3 rounded-2xl border border-white/10 mb-2 shadow-inner";
-                    card.innerHTML = `
-                        <div class="flex items-start gap-4">
-                            <div class="text-orange-300 font-black text-base shrink-0 pt-1 w-14 border-r border-white/10">
-                                ${item.subject}
-                            </div>
-                            <div class="flex flex-wrap gap-2 flex-1">
-                                ${item.students.map((s, sIdx) => `
-                                    <button onclick="toggleStudent('${idx}', '${sIdx}')" 
-                                        class="w-10 h-10 rounded-xl font-black text-sm transition-all border 
-                                        ${s.done ? 'bg-white/5 border-transparent opacity-10 line-through text-slate-500' : 'bg-orange-500/30 border-orange-500/50 text-white active:scale-90 shadow-[0_0_10px_rgba(249,115,22,0.1)]'}">
-                                        ${s.id}
-                                    </button>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
+                alert("密碼錯誤！");
+                const input = document.getElementById('admin-pass-input');
+                if(input) input.value = "";
+            }
+        };
+
+        window.closeAdminLogout = () => {
+            document.getElementById('admin-logout-modal').classList.add('hidden');
+            document.getElementById('admin-logout-modal').classList.remove('flex');
+        };
+
+        window.handleAdminLogout = () => {
+            window.isAdmin = false;
+            renderBoard();
+            window.closeAdminLogout();
+        };
+
+        window.openEdit = (field, title, help = "") => {
+            // 計時器點選功能：如果是計時器 (timer)，則跳過管理權限檢查
+            if (!window.isAdmin && field !== 'timer') return; 
+            
+            window.currentField = field;
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-help').textContent = help;
+            
+            const quoteSelector = document.getElementById('quote-selector-container');
+            if (field === 'quote') {
+                quoteSelector.classList.remove('hidden');
+                window.setQuoteType(appData.quoteType || 'quote');
+            } else {
+                quoteSelector.classList.add('hidden');
             }
 
-            updateCountdowns();
-            const muteIcon = document.getElementById('mute-icon');
-            if (muteIcon) muteIcon.className = appData.isMuted ? 'fas fa-volume-mute text-rose-400' : 'fas fa-volume-up text-emerald-400';
-            updateTimerDisplay();
-        }
+            let val = appData[field];
+            if (field === 'missing') {
+                val = (appData.missing || []).map(g => `${g.subject}：${g.students.map(s => s.id).join(', ')}`).join('\n');
+            } else if (field === 'timer') {
+                const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+                const s = (timerSeconds % 60).toString().padStart(2, '0');
+                val = `${m}:${s}`;
+            }
 
-        function updateCountdowns() {
-            const calc = (dateStr) => {
-                const target = new Date(dateStr).setHours(0,0,0,0);
-                const now = new Date().setHours(0,0,0,0);
-                const diff = Math.ceil((target - now) / 86400000);
-                return diff < 0 ? 0 : diff;
-            };
-            document.getElementById('exam-countdown').textContent = calc(DATES.exam);
-            document.getElementById('mock-countdown').textContent = calc(DATES.mock);
-            document.getElementById('final-countdown').textContent = calc(DATES.final);
-        }
-
-        window.toggleStudent = (subjectIdx, studentIdx) => {
-            const updated = JSON.parse(JSON.stringify(appData.missing));
-            updated[subjectIdx].students[studentIdx].done = !updated[subjectIdx].students[studentIdx].done;
-            window.saveData({ missing: updated });
+            const input = document.getElementById('modal-input');
+            if (input) {
+                input.value = val || "";
+                document.getElementById('modal').classList.remove('hidden');
+                document.getElementById('modal').classList.add('flex');
+                input.focus();
+            }
         };
 
-        window.toggleMarqueeSpeed = (e) => {
-            e.stopPropagation();
-            const speeds = { "25s": "40s", "40s": "15s", "15s": "0s", "0s": "25s" };
-            window.saveData({ marqueeSpeed: speeds[appData.marqueeSpeed || "25s"] });
+        window.closeEdit = () => {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal').classList.remove('flex');
         };
 
+        window.confirmEdit = () => {
+            const input = document.getElementById('modal-input');
+            if (!input) return;
+            const val = input.value.trim();
+            const update = {};
+            
+            // 處理計時器更新邏輯 (此部分為本機變數)
+            if (window.currentField === 'timer') {
+                if (val.includes(':')) {
+                    const [m, s] = val.split(':').map(x => parseInt(x) || 0);
+                    timerSeconds = (m * 60) + s;
+                } else { timerSeconds = (parseInt(val) || 0) * 60; }
+                updateTimerDisplay();
+                window.closeEdit();
+                return;
+            }
+            
+            // 處理其他需要資料庫更新的欄位
+            if (window.currentField === 'missing') {
+                update.missing = val.split('\n').filter(line => line.includes('：') || line.includes(':')).map(line => {
+                    const [sub, ids] = line.split(/[：:]/);
+                    return { subject: sub.trim(), students: ids.split(/[,，\s]+/).filter(i => i).map(id => ({ id: id.trim().padStart(2, '0'), done: false })) };
+                });
+            } else if (window.currentField === 'quote') {
+                update.quote = val;
+                update.quoteType = selectedQuoteType;
+            } else { update[window.currentField] = val; }
+            window.saveData(update);
+            window.closeEdit();
+        };
+
+        // 計時器操作功能 (不需要 isAdmin)
         window.toggleTimer = () => {
             if (timerInterval) {
                 clearInterval(timerInterval);
@@ -220,11 +372,32 @@
             document.getElementById('timer-btn').textContent = "開始";
         };
 
-        function updateTimerDisplay() {
-            const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-            const s = (timerSeconds % 60).toString().padStart(2, '0');
-            document.getElementById('timer-display').textContent = `${m}:${s}`;
-        }
+        window.toggleStudent = (subjectIdx, studentIdx) => {
+            if (!window.isAdmin) return;
+            const updated = JSON.parse(JSON.stringify(appData.missing));
+            updated[subjectIdx].students[studentIdx].done = !updated[subjectIdx].students[studentIdx].done;
+            window.saveData({ missing: updated });
+        };
+
+        window.toggleMarqueeSpeed = (e) => {
+            if (!window.isAdmin) return;
+            e.stopPropagation();
+            const speeds = { "25s": "40s", "40s": "15s", "15s": "0s", "0s": "25s" };
+            window.saveData({ marqueeSpeed: speeds[appData.marqueeSpeed || "25s"] });
+        };
+
+        window.setQuoteType = (type) => {
+            selectedQuoteType = type;
+            const btnQuote = document.getElementById('btn-type-quote');
+            const btnJournal = document.getElementById('btn-type-journal');
+            if (type === 'quote') {
+                btnQuote.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400 text-white';
+                btnJournal.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50 text-white';
+            } else {
+                btnJournal.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400 text-white';
+                btnQuote.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50 text-white';
+            }
+        };
 
         window.spinLucky = () => {
             const el = document.getElementById('lucky-num');
@@ -241,88 +414,6 @@
                 }
             }, 80);
         };
-
-        window.openEdit = (field, title, help = "") => {
-            window.currentField = field;
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-help').textContent = help;
-            
-            const quoteSelector = document.getElementById('quote-selector-container');
-            if (field === 'quote') {
-                quoteSelector.classList.remove('hidden');
-                setQuoteType(appData.quoteType || 'quote');
-            } else {
-                quoteSelector.classList.add('hidden');
-            }
-
-            let val = appData[field];
-            if (field === 'missing') {
-                val = (appData.missing || []).map(g => `${g.subject}：${g.students.map(s => s.id).join(', ')}`).join('\n');
-            } else if (field === 'timer') {
-                const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-                const s = (timerSeconds % 60).toString().padStart(2, '0');
-                val = `${m}:${s}`;
-            }
-
-            document.getElementById('modal-input').value = val || "";
-            document.getElementById('modal').classList.remove('hidden');
-            document.getElementById('modal').classList.add('flex');
-        };
-
-        window.setQuoteType = (type) => {
-            selectedQuoteType = type;
-            const btnQuote = document.getElementById('btn-type-quote');
-            const btnJournal = document.getElementById('btn-type-journal');
-            if (type === 'quote') {
-                btnQuote.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400';
-                btnJournal.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50';
-            } else {
-                btnJournal.className = 'flex-1 py-2 bg-indigo-600 rounded-lg font-bold border border-indigo-400';
-                btnQuote.className = 'flex-1 py-2 bg-white/5 rounded-lg font-bold opacity-50';
-            }
-        };
-
-        window.closeEdit = () => {
-            document.getElementById('modal').classList.add('hidden');
-            document.getElementById('modal').classList.remove('flex');
-        };
-
-        window.confirmEdit = () => {
-            const val = document.getElementById('modal-input').value.trim();
-            const update = {};
-            if (window.currentField === 'timer') {
-                if (val.includes(':')) {
-                    const [m, s] = val.split(':').map(x => parseInt(x) || 0);
-                    timerSeconds = (m * 60) + s;
-                } else { timerSeconds = (parseInt(val) || 0) * 60; }
-                updateTimerDisplay();
-                closeEdit();
-                return;
-            }
-            if (window.currentField === 'missing') {
-                update.missing = val.split('\n').filter(line => line.includes('：') || line.includes(':')).map(line => {
-                    const [sub, ids] = line.split(/[：:]/);
-                    return { subject: sub.trim(), students: ids.split(/[,，\s]+/).filter(i => i).map(id => ({ id: id.trim().padStart(2, '0'), done: false })) };
-                });
-            } else if (window.currentField === 'quote') {
-                update.quote = val;
-                update.quoteType = selectedQuoteType;
-            } else { update[window.currentField] = val; }
-            window.saveData(update);
-            closeEdit();
-        };
-
-        function updateStatusUI(isOk) {
-            const dot = document.getElementById('sync-status-dot');
-            const text = document.getElementById('sync-status-text');
-            if (dot) {
-                dot.className = isOk ? 'w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse' : 'w-1.5 h-1.5 rounded-full bg-rose-500';
-            }
-            if (text) {
-                text.textContent = isOk ? "ONLINE" : "OFFLINE";
-                text.className = isOk ? "text-[8px] text-emerald-500/80 font-black" : "text-[8px] text-rose-500/80 font-black";
-            }
-        }
 
         window.onload = () => {
             init();
@@ -353,14 +444,14 @@
             padding: 0.75rem;
             box-sizing: border-box;
             gap: 0.5rem;
+            transition: all 0.5s ease;
         }
 
-        /* 標題設計感 */
         .title-gradient {
             background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 50%, #818cf8 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(129, 140, 248, 0.3);
+            filter: drop-shadow(0 0 12px rgba(129, 140, 248, 0.4));
         }
 
         .glass { 
@@ -377,12 +468,15 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
             padding: 0.5rem 1.25rem;
             border-radius: 1.25rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
         .editable { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
         .editable:hover { background: rgba(255, 255, 255, 0.08); transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.25); }
         
+        body.admin-active {
+            background: radial-gradient(circle at top right, #1e2552, #070912);
+        }
+
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .font-num { font-family: 'Consolas', 'Monaco', monospace; }
         
@@ -391,31 +485,63 @@
         
         @media (max-width: 1023px) {
             html, body { overflow-y: auto; height: auto; }
-            body { gap: 0.75rem; padding: 0.5rem; }
+            body { gap: 0.75rem; }
             main { display: flex; flex-direction: column; gap: 0.75rem; }
-            section { min-height: 280px; }
         }
     </style>
 </head>
 <body class="space-y-2">
 
-    <!-- 編輯彈窗 -->
+    <!-- 管理員登入自定義彈窗 -->
+    <div id="admin-login-modal" class="fixed inset-0 bg-black/95 backdrop-blur-3xl z-[200] hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-white/20 w-full max-sm:w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center">
+            <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(79,70,229,0.5)]">
+                <i class="fas fa-user-lock text-white text-2xl"></i>
+            </div>
+            <h3 class="text-2xl font-black text-white mb-2">管理授權</h3>
+            <p class="text-slate-500 text-xs mb-6 uppercase tracking-[0.2em]">請輸入 908 班級密碼</p>
+            <input type="password" id="admin-pass-input" 
+                   class="w-full bg-black/50 border border-white/10 rounded-2xl px-4 py-4 text-center text-3xl font-num tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-6 text-white"
+                   placeholder="****"
+                   onkeydown="if(event.key==='Enter') window.handleAdminLogin()">
+            <div class="flex gap-4">
+                <button onclick="window.closeAdminLogin()" class="flex-1 py-4 bg-white/5 rounded-2xl font-bold hover:bg-white/10 transition-colors text-white">取消</button>
+                <button onclick="window.handleAdminLogin()" class="flex-1 py-4 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 transition-all text-white">解鎖編輯</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登出確認彈窗 -->
+    <div id="admin-logout-modal" class="fixed inset-0 bg-black/95 backdrop-blur-3xl z-[200] hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-white/20 w-full max-sm:w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center text-white">
+            <div class="w-16 h-16 bg-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(225,29,72,0.4)]">
+                <i class="fas fa-sign-out-alt text-white text-2xl"></i>
+            </div>
+            <h3 class="text-2xl font-black text-white mb-2">鎖定看板？</h3>
+            <p class="text-slate-400 text-sm mb-6 leading-relaxed">鎖定後將切換為「唯讀模式」<br>學生在其他設備將無法進行編輯。</p>
+            <div class="flex gap-4">
+                <button onclick="window.closeAdminLogout()" class="flex-1 py-4 bg-white/5 rounded-2xl font-bold hover:bg-white/10 transition-colors">取消</button>
+                <button onclick="window.handleAdminLogout()" class="flex-1 py-4 bg-rose-600 rounded-2xl font-bold hover:bg-rose-500 transition-all shadow-lg shadow-rose-900/20">確認鎖定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯內容彈窗 -->
     <div id="modal" class="fixed inset-0 bg-black/90 backdrop-blur-3xl z-[100] hidden items-center justify-center p-4">
-        <div class="bg-slate-900/90 border border-white/20 w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative">
+        <div class="bg-slate-900/90 border border-white/20 w-full max-lg:max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative text-white">
             <h3 id="modal-title" class="text-2xl font-black mb-1 text-indigo-400">編輯內容</h3>
             <p id="modal-help" class="text-slate-500 text-[11px] mb-4 whitespace-pre-wrap"></p>
             
-            <!-- 佳句/札記切換按鈕 -->
             <div id="quote-selector-container" class="hidden mb-4 flex gap-2">
-                <button id="btn-type-quote" onclick="setQuoteType('quote')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日佳句</button>
-                <button id="btn-type-journal" onclick="setQuoteType('journal')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日札記</button>
+                <button id="btn-type-quote" onclick="window.setQuoteType('quote')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日佳句</button>
+                <button id="btn-type-journal" onclick="window.setQuoteType('journal')" class="flex-1 py-2 rounded-lg font-bold transition-all">今日札記</button>
             </div>
 
             <textarea id="modal-input" class="w-full h-48 bg-black/60 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg mb-6 resize-none shadow-inner"></textarea>
             
             <div class="flex gap-4">
-                <button onclick="closeEdit()" class="flex-1 py-4 bg-white/5 rounded-2xl font-bold hover:bg-white/10 transition-colors">取消</button>
-                <button onclick="confirmEdit()" class="flex-1 py-4 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all">儲存變更</button>
+                <button onclick="window.closeEdit()" class="flex-1 py-4 bg-white/5 rounded-2xl font-bold hover:bg-white/10 transition-colors">取消</button>
+                <button onclick="window.confirmEdit()" class="flex-1 py-4 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all">儲存變更</button>
             </div>
         </div>
     </div>
@@ -428,17 +554,18 @@
             </div>
             <div>
                 <div class="flex items-center gap-3">
-                    <div class="flex flex-col">
-                        <h1 class="text-2xl font-black tracking-tighter title-gradient leading-none">九年八班</h1>
-                        <span class="text-[10px] font-black tracking-[0.2em] text-indigo-400 uppercase opacity-80">Digital Information Board</span>
+                    <div class="flex flex-col cursor-pointer transition-all hover:scale-105 active:opacity-50" onclick="window.openAdminLogin()">
+                        <h1 class="text-4xl font-black tracking-tighter title-gradient leading-none pb-1">九年八班</h1>
+                        <span class="text-[10px] font-black tracking-[0.4em] text-indigo-400/80 uppercase mt-1">Digital Information Board</span>
                     </div>
                     <div class="bg-white/5 px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-2">
                         <div id="sync-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></div>
                         <span id="sync-status-text" class="text-[8px] text-slate-500 font-black tracking-widest uppercase">READING</span>
+                        <i id="lock-status-icon" class="fas fa-lock text-slate-500 ml-1 transition-all" style="font-size: 8px;"></i>
                         <span id="user-id-display" class="text-[8px] text-slate-500 font-mono hidden sm:inline opacity-40">...</span>
                     </div>
                 </div>
-                <div id="date-display" class="text-white font-black text-sm tracking-widest mt-1">載入中...</div>
+                <div id="date-display" class="text-white font-black text-sm tracking-widest mt-1 uppercase">載入中...</div>
             </div>
         </div>
 
@@ -457,55 +584,50 @@
                     <div class="text-4xl font-num font-black text-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.5)]" id="final-countdown">--</div>
                 </div>
             </div>
-            <div id="clock-display" class="text-4xl md:text-6xl font-num font-black text-white/95 ml-4 tracking-tighter">00:00:00</div>
+            <div id="clock-display" class="text-4xl md:text-6xl font-num font-black text-white/95 ml-4 tracking-tighter text-right">00:00:00</div>
         </div>
     </header>
 
     <!-- 跑馬燈 -->
     <div class="bg-gradient-to-r from-rose-600 via-rose-500 to-rose-600 h-14 flex items-center overflow-hidden shadow-2xl shrink-0 border-y border-rose-400/40">
-        <button onclick="toggleMarqueeSpeed(event)" class="bg-black/30 h-full px-5 flex items-center z-10 border-r border-white/10 hover:bg-black/50 transition-all group">
-            <span id="speed-label" class="text-[10px] font-black uppercase tracking-tighter group-hover:scale-110 transition-transform">一般</span>
+        <button onclick="window.isAdmin && window.toggleMarqueeSpeed(event)" class="bg-black/30 h-full px-5 flex items-center z-10 border-r border-white/10 hover:bg-black/50 transition-all group">
+            <span id="speed-label" class="text-[10px] font-black uppercase tracking-tighter group-hover:scale-110 transition-transform text-white">一般</span>
         </button>
-        <div class="flex-1 overflow-hidden cursor-pointer" onclick="openEdit('marquee', '跑馬燈公告')">
-            <div id="marquee-content" class="animate-marquee font-black text-2xl tracking-wide drop-shadow-md">載入中...</div>
+        <div class="flex-1 overflow-hidden cursor-pointer" onclick="window.isAdmin && window.openEdit('marquee', '跑馬燈公告')">
+            <div id="marquee-content" class="animate-marquee font-black text-2xl tracking-wide drop-shadow-md text-white">載入中...</div>
         </div>
     </div>
 
     <!-- 主要內容區 -->
     <main class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
-        <!-- 第一欄：今日聯絡簿 -->
         <section class="flex flex-col min-h-0 h-full">
-            <div onclick="openEdit('homework', '今日聯絡簿')" class="glass p-7 flex-1 flex flex-col border-t-4 border-yellow-400/80 editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(250,204,21,0.05)]">
+            <div onclick="window.isAdmin && window.openEdit('homework', '今日聯絡簿')" class="glass p-7 flex-1 flex flex-col border-t-4 border-yellow-400/80 editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(250,204,21,0.05)] text-white">
                 <h2 class="text-lg font-black text-yellow-400 mb-4 flex items-center shrink-0 uppercase tracking-widest"><i class="fas fa-edit mr-3"></i> 今日聯絡簿</h2>
                 <div id="homework-list" class="text-2xl font-bold leading-loose whitespace-pre-wrap overflow-y-auto flex-1 text-slate-100 pr-2 custom-scroll"></div>
             </div>
         </section>
 
-        <!-- 第二欄：重要提醒 + 佳句 -->
         <section class="flex flex-col space-y-4 min-h-0 h-full">
-            <!-- 重要提醒 -->
-            <div onclick="openEdit('important', '重要提醒')" class="glass p-7 flex-1 border-t-4 border-blue-400/80 flex flex-col editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(96,165,250,0.05)]">
+            <div onclick="window.isAdmin && window.openEdit('important', '重要提醒')" class="glass p-7 flex-1 border-t-4 border-blue-400/80 flex flex-col editable min-h-0 overflow-hidden shadow-[0_0_50px_rgba(96,165,250,0.05)] text-white">
                 <h2 class="text-lg font-black text-blue-400 mb-4 flex items-center shrink-0 uppercase tracking-widest"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
                 <div id="important-note" class="text-2xl font-bold leading-loose text-blue-50 whitespace-pre-wrap overflow-y-auto flex-1 pr-2 custom-scroll"></div>
             </div>
-            <!-- 今日佳句 / 札記 -->
-            <div onclick="openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-7 h-56 flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group">
+            <div onclick="window.isAdmin && window.openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-7 h-56 flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group text-white">
                 <h2 id="quote-title" class="text-xs font-black text-indigo-400/60 uppercase tracking-[0.3em] mb-4 self-start">今日佳句</h2>
                 <div class="w-full text-left opacity-20 group-hover:opacity-40 transition-opacity">
-                    <i class="fas fa-quote-left text-3xl text-white"></i>
+                    <i class="fas fa-quote-left text-3xl"></i>
                 </div>
                 <div id="quote-display" class="text-2xl italic font-black text-white text-center leading-relaxed px-6 drop-shadow-md"></div>
                 <div class="w-full text-right opacity-20 group-hover:opacity-40 transition-opacity">
-                    <i class="fas fa-quote-right text-3xl text-white"></i>
+                    <i class="fas fa-quote-right text-3xl"></i>
                 </div>
             </div>
         </section>
 
-        <!-- 第三欄：未交名單 -->
-        <section class="glass p-7 border-t-4 border-orange-400/80 flex flex-col h-full min-h-0 overflow-hidden shadow-[0_0_50px_rgba(251,146,60,0.05)]">
+        <section class="glass p-7 border-t-4 border-orange-400/80 flex flex-col h-full min-h-0 overflow-hidden shadow-[0_0_50px_rgba(251,146,60,0.05)] text-white">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h2 class="text-lg font-black text-orange-400 flex items-center uppercase tracking-widest"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
-                <button onclick="openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="text-[10px] bg-white/10 px-4 py-2 rounded-xl font-black hover:bg-white/20 transition-all border border-white/5 uppercase">Edit List</button>
+                <button id="btn-edit-missing" onclick="window.openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="hidden text-[10px] bg-white/10 px-4 py-2 rounded-xl font-black hover:bg-white/20 transition-all border border-white/5 uppercase">Edit List</button>
             </div>
             <div id="missing-container" class="flex-1 overflow-y-auto pr-2 custom-scroll"></div>
         </section>
@@ -518,22 +640,26 @@
                 <p class="text-indigo-400 text-[9px] font-black uppercase mb-1 tracking-[0.2em] opacity-80">Lucky (1-25)</p>
                 <div id="lucky-num" class="text-3xl font-num font-black text-white drop-shadow-lg">??</div>
             </div>
-            <button onclick="spinLucky()" class="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center z-10 active:scale-90 transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500"><i class="fas fa-dice text-xl"></i></button>
+            <button onclick="window.spinLucky()" class="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center z-10 active:scale-90 transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500"><i class="fas fa-dice text-xl text-white"></i></button>
             <div class="absolute -right-2 -bottom-2 text-white/5 text-5xl font-black rotate-12 group-hover:rotate-0 transition-transform">抽</div>
         </div>
 
+        <!-- 計時器區域：直接開放 -->
         <div class="glass rounded-2xl p-4 flex items-center justify-between">
-            <div>
+            <div class="flex-1">
                 <div class="flex items-center gap-3 mb-1">
-                    <p class="text-emerald-400 text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Timer</p>
-                    <button onclick="window.saveData({isMuted: !appData.isMuted})" class="hover:scale-110 transition-transform"><i id="mute-icon" class="fas fa-volume-up text-[10px]"></i></button>
+                    <p class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] opacity-80">Timer</p>
+                    <!-- 靜音按鈕不隱藏 -->
+                    <button id="btn-mute-toggle" onclick="window.saveData({isMuted: !appData.isMuted})" class="hover:scale-110 transition-transform"><i id="mute-icon" class="fas fa-volume-up text-[10px] text-emerald-400"></i></button>
                 </div>
-                <div id="timer-display" onclick="openEdit('timer', '設定計時器', '分:秒')" 
+                <!-- 計時器數字點選開放 (不檢查 isAdmin) -->
+                <div id="timer-display" onclick="window.openEdit('timer', '設定計時器', '分:秒')" 
                      class="text-3xl font-num font-black text-emerald-400 cursor-pointer drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] hover:text-emerald-300 transition-colors">05:00</div>
             </div>
-            <div class="flex flex-col gap-1.5">
-                <button id="timer-btn" onclick="toggleTimer()" class="bg-emerald-600 px-4 py-1.5 rounded-lg font-black text-[10px] hover:bg-emerald-500 shadow-lg shadow-emerald-900/20">開始</button>
-                <button onclick="resetTimer()" class="bg-white/10 px-4 py-1.5 rounded-lg font-black text-[10px] hover:bg-white/20 transition-colors">重置</button>
+            <div class="flex flex-col gap-1 ml-2">
+                <!-- 操作按鈕不隱藏 -->
+                <button id="timer-btn" onclick="window.toggleTimer()" class="bg-emerald-600 px-3 py-0.5 rounded-md font-bold text-[8px] hover:bg-emerald-500 transition-colors text-white">開始</button>
+                <button onclick="window.resetTimer()" class="bg-slate-700/50 px-3 py-0.5 rounded-md font-bold text-[8px] hover:bg-slate-700 transition-colors text-white">重置</button>
             </div>
         </div>
 
