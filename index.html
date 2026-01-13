@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>九年八班 數位資訊看板 - 雲端美化版</title>
+    <title>九年八班 數位資訊看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -12,15 +12,21 @@
         import { getFirestore, doc, onSnapshot, updateDoc, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // --- Firebase 配置與初始化 ---
+        // --- Firebase 配置 ---
+        // 優先讀取系統變數，若無則使用使用者提供的原始配置作為備援
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'classroom-908-board';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyAfsi-TZ8LrFfZ2Cw6w1DQNTaM_q-oiL-Q",
+            authDomain: "classroom-board.firebaseapp.com",
+            projectId: "classroom-board",
+            storageBucket: "classroom-board.firebasestorage.app",
+            messagingSenderId: "802885901626",
+            appId: "1:802885901626:web:df25f12cef342c373ac403"
+        };
+
         let db, auth, user;
         let timerInterval = null;
         let timerSeconds = 300; 
-        
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'classroom-908-board';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : { apiKey: "" };
 
         const DATES = { 
             exam: "2026-01-21", 
@@ -29,11 +35,11 @@
         };
 
         const defaultData = {
-            marquee: "九年八班雲端看板已啟動！點擊區塊即可編輯內容。",
+            marquee: "九年八班數位看板已連線！點擊各區塊即可編輯內容。",
             marqueeSpeed: "25s",
-            homework: "1. 國文講義 P.35-P.40\n2. 英文單字 L5 小考 (明天)\n3. 數學習作 3-1 完工",
-            missing: [{ subject: "數學", students: [{id: "03", done: false}, {id: "15", done: false}] }],
-            important: "1. 視力檢查：明天 08:30。\n2. 記得帶環保餐具。",
+            homework: "1. 國文講義 P.35-P.40\n2. 英文單字 L5 小考\n3. 數學習作 3-1 完工",
+            missing: [{ subject: "數學", students: [{id: "01", done: false}] }],
+            important: "1. 記得帶環保餐具。\n2. 明天早自習測驗。",
             quote: "「努力不一定成功，但不努力一定很輕鬆。」",
             isMuted: false
         };
@@ -56,14 +62,14 @@
             osc.stop(audioCtx.currentTime + duration);
         }
 
-        // --- Firebase 核心邏輯 ---
+        // --- 初始化連線 ---
         async function init() {
             try {
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                const performLogin = async () => {
+                const login = async () => {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         return await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
@@ -71,25 +77,26 @@
                     }
                 };
 
-                await performLogin();
+                await login();
 
                 onAuthStateChanged(auth, (u) => {
                     user = u;
                     if (user) {
-                        const uidDisplay = document.getElementById('user-id-display');
-                        if (uidDisplay) uidDisplay.textContent = `UID: ${user.uid.substring(0,6)}`;
-                        updateStatusUI("雲端同步中", "text-emerald-400");
+                        document.getElementById('user-id-display').textContent = `UID: ${user.uid.substring(0,6)}`;
+                        updateStatusUI("連線成功", "text-emerald-400");
                         setupSync();
                     }
                 });
             } catch (error) {
                 console.error("Firebase Error:", error);
-                updateStatusUI("連線失敗", "text-rose-500");
+                updateStatusUI("連線重試中", "text-rose-400");
+                setTimeout(init, 3000);
             }
         }
 
         function setupSync() {
             if (!user) return;
+            // 遵循 Rule 1 路徑
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boardConfig', 'main');
             onSnapshot(docRef, (snap) => {
                 if (snap.exists()) {
@@ -98,6 +105,8 @@
                 } else {
                     setDoc(docRef, defaultData);
                 }
+            }, (err) => {
+                updateStatusUI("同步受限", "text-amber-400");
             });
         }
 
@@ -107,7 +116,7 @@
             try { await updateDoc(docRef, update); } catch (e) { await setDoc(docRef, update, { merge: true }); }
         };
 
-        // --- UI 渲染與互動 ---
+        // --- UI 渲染 ---
         function renderBoard() {
             document.getElementById('marquee-content').textContent = appData.marquee;
             document.getElementById('homework-list').textContent = appData.homework;
@@ -117,36 +126,27 @@
             // 跑馬燈
             const mContent = document.getElementById('marquee-content');
             const speed = appData.marqueeSpeed || "25s";
-            document.getElementById('speed-label').textContent = 
-                speed === "0s" ? "靜止" : speed === "40s" ? "慢速" : speed === "15s" ? "快速" : "正常";
-            
-            if (speed === "0s") {
-                mContent.style.animation = "none";
-                mContent.className = "px-4 font-bold text-lg text-rose-100";
-            } else {
-                mContent.style.animation = `marquee ${speed} linear infinite`;
-                mContent.className = "animate-marquee font-bold text-lg text-rose-50";
-            }
+            document.getElementById('speed-label').textContent = speed === "0s" ? "靜止" : speed === "40s" ? "慢" : speed === "15s" ? "快" : "一般";
+            mContent.style.animation = speed === "0s" ? "none" : `marquee ${speed} linear infinite`;
 
-            // 作業未交 (美化卡片)
+            // 未交名單
             const container = document.getElementById('missing-container');
             container.innerHTML = '';
             if (!appData.missing || appData.missing.length === 0) {
-                container.innerHTML = '<div class="h-full flex items-center justify-center text-emerald-400 font-black text-xl opacity-60">✨ 完美全交</div>';
+                container.innerHTML = '<div class="h-full flex items-center justify-center text-emerald-400 font-bold opacity-40">全部交齊了</div>';
             } else {
                 appData.missing.forEach((item, idx) => {
                     const card = document.createElement('div');
-                    card.className = "bg-slate-800/50 p-3 rounded-2xl border border-white/5 mb-3";
+                    card.className = "bg-slate-800/40 p-3 rounded-xl border border-white/5 mb-2";
                     card.innerHTML = `
-                        <div class="text-orange-300 font-bold mb-2 flex justify-between items-center px-1">
-                            <span class="text-base">${item.subject}</span>
-                            <span class="text-[9px] opacity-30 font-normal">點擊號碼標記</span>
+                        <div class="text-orange-300 font-bold mb-1.5 flex justify-between items-center text-sm">
+                            <span>${item.subject}</span>
                         </div>
                         <div class="flex flex-wrap gap-1.5">
                             ${item.students.map((s, sIdx) => `
                                 <button onclick="toggleStudent('${idx}', '${sIdx}')" 
-                                    class="w-9 h-9 rounded-lg font-black text-base transition-all border 
-                                    ${s.done ? 'bg-slate-700/50 border-transparent opacity-20 line-through' : 'bg-orange-500/10 border-orange-500/30 text-orange-100 hover:scale-110 active:scale-95 shadow-sm'}">
+                                    class="w-8 h-8 rounded-lg font-black text-sm transition-all border 
+                                    ${s.done ? 'bg-slate-700/50 border-transparent opacity-20 line-through' : 'bg-orange-500/20 border-orange-500/30 text-orange-100 hover:scale-110'}">
                                     ${s.id}
                                 </button>
                             `).join('')}
@@ -186,13 +186,12 @@
             window.saveData({ marqueeSpeed: speeds[appData.marqueeSpeed || "25s"] });
         };
 
-        // --- 計時器邏輯 ---
+        // --- 計時器 ---
         window.toggleTimer = () => {
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
                 document.getElementById('timer-btn').textContent = "開始";
-                document.getElementById('timer-btn').className = "bg-emerald-600 px-4 py-2 rounded-xl font-bold text-xs shadow-lg shadow-emerald-900/20";
             } else {
                 if (timerSeconds <= 0) return;
                 timerInterval = setInterval(() => {
@@ -206,7 +205,6 @@
                     }
                 }, 1000);
                 document.getElementById('timer-btn').textContent = "停止";
-                document.getElementById('timer-btn').className = "bg-rose-600 px-4 py-2 rounded-xl font-bold text-xs shadow-lg shadow-rose-900/20";
             }
         };
 
@@ -224,10 +222,9 @@
             document.getElementById('timer-display').textContent = `${m}:${s}`;
         }
 
-        // --- 抽籤邏輯 ---
+        // --- 抽籤 ---
         window.spinLucky = () => {
             const el = document.getElementById('lucky-num');
-            el.classList.add('animate-pulse');
             let count = 0;
             const end = 15;
             const interval = setInterval(() => {
@@ -237,10 +234,7 @@
                 count++;
                 if (count >= end) {
                     clearInterval(interval);
-                    el.classList.remove('animate-pulse');
-                    el.classList.add('scale-110', 'text-yellow-400');
                     playSound(880, 'triangle', 0.5, 0.1); 
-                    setTimeout(() => el.classList.remove('scale-110', 'text-yellow-400'), 1500);
                 }
             }, 80);
         };
@@ -262,16 +256,12 @@
 
             document.getElementById('modal-input').value = val || "";
             document.getElementById('modal').classList.remove('hidden');
-            setTimeout(() => {
-                document.getElementById('modal-box').classList.remove('scale-95');
-                document.getElementById('modal').classList.add('opacity-100');
-            }, 10);
+            document.getElementById('modal').classList.add('flex');
         };
 
         window.closeEdit = () => {
-            document.getElementById('modal').classList.remove('opacity-100');
-            document.getElementById('modal-box').classList.add('scale-95');
-            setTimeout(() => document.getElementById('modal').classList.add('hidden'), 300);
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal').classList.remove('flex');
         };
 
         window.confirmEdit = () => {
@@ -298,7 +288,7 @@
 
         function updateStatusUI(msg, color) {
             const text = document.getElementById('sync-status-text');
-            if (text) { text.textContent = msg; text.className = `mr-1.5 font-bold ${color}`; }
+            if (text) { text.textContent = msg; text.className = `font-bold ${color}`; }
         }
 
         window.onload = () => {
@@ -314,153 +304,145 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background: radial-gradient(circle at top right, #1e293b, #0f172a); color: white; height: 100vh; overflow: hidden; }
-        .glass { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); }
-        .editable { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-        .editable:hover { background: rgba(255, 255, 255, 0.08); transform: translateY(-2px); border-color: rgba(255,255,255,0.15); }
+        .glass { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); }
+        .editable { transition: all 0.2s; cursor: pointer; }
+        .editable:hover { background: rgba(255, 255, 255, 0.05); transform: scale(1.005); }
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .animate-marquee { display: inline-block; white-space: nowrap; }
-        .font-num { font-family: 'JetBrains Mono', 'Monaco', monospace; }
+        .font-num { font-family: 'Consolas', 'Monaco', monospace; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
     </style>
 </head>
-<body class="p-5 flex flex-col space-y-5">
+<body class="p-4 flex flex-col space-y-4">
 
     <!-- 編輯彈窗 -->
-    <div id="modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[100] hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
-        <div id="modal-box" class="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl transition-transform duration-300 scale-95">
-            <h3 id="modal-title" class="text-2xl font-black mb-1 text-indigo-400">編輯內容</h3>
-            <p id="modal-help" class="text-slate-500 text-xs mb-6 whitespace-pre-wrap leading-relaxed"></p>
-            <textarea id="modal-input" class="w-full h-44 bg-slate-800/80 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg mb-6 resize-none"></textarea>
+    <div id="modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[100] hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl">
+            <h3 id="modal-title" class="text-xl font-black mb-1 text-indigo-400">編輯內容</h3>
+            <p id="modal-help" class="text-slate-500 text-[10px] mb-4 whitespace-pre-wrap"></p>
+            <textarea id="modal-input" class="w-full h-40 bg-slate-800 border border-white/10 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg mb-6 resize-none"></textarea>
             <div class="flex gap-4">
-                <button onclick="closeEdit()" class="flex-1 py-4 bg-slate-800 rounded-2xl font-bold hover:bg-slate-700 transition-colors">取消</button>
-                <button onclick="confirmEdit()" class="flex-1 py-4 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">確定儲存</button>
+                <button onclick="closeEdit()" class="flex-1 py-3 bg-slate-800 rounded-xl font-bold">取消</button>
+                <button onclick="confirmEdit()" class="flex-1 py-3 bg-indigo-600 rounded-xl font-bold">儲存</button>
             </div>
         </div>
     </div>
 
     <!-- Header -->
-    <header class="glass rounded-[2rem] p-6 flex flex-col md:flex-row justify-between items-center relative overflow-hidden">
-        <div class="flex items-center space-x-6">
-            <div class="w-14 h-14 bg-indigo-600 flex items-center justify-center rounded-2xl shadow-lg shadow-indigo-500/40">
-                <i class="fas fa-desktop text-2xl text-white"></i>
+    <header class="glass rounded-[1.5rem] p-5 flex flex-col md:flex-row justify-between items-center">
+        <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 bg-indigo-600 flex items-center justify-center rounded-xl">
+                <i class="fas fa-desktop text-xl text-white"></i>
             </div>
             <div>
-                <div class="flex items-center gap-4">
-                    <h1 class="text-3xl font-black tracking-tight">九年八班 <span class="text-indigo-400">數位資訊看板</span></h1>
-                    <div class="bg-slate-800/80 px-3 py-1 rounded-full border border-white/5 flex items-center gap-2">
-                        <span id="sync-status-text" class="text-[9px] font-bold">同步中</span>
-                        <span id="user-id-display" class="text-[9px] text-slate-500 font-mono">ID: ...</span>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-black">九年八班 <span class="text-indigo-400">數位資訊看板</span></h1>
+                    <div class="bg-black/20 px-2 py-0.5 rounded-full border border-white/5 flex items-center gap-2">
+                        <span id="sync-status-text" class="text-[9px]">連線中</span>
+                        <span id="user-id-display" class="text-[9px] text-slate-500 font-mono">...</span>
                     </div>
                 </div>
-                <div id="date-display" class="text-slate-400 font-bold mt-1 text-xs tracking-widest opacity-80 uppercase">讀取中...</div>
+                <div id="date-display" class="text-slate-500 font-bold text-[10px] tracking-widest uppercase">載入中...</div>
             </div>
         </div>
 
-        <div class="flex items-center gap-8 mt-6 md:mt-0">
+        <div class="flex items-center gap-6 mt-4 md:mt-0">
             <div class="flex gap-4">
-                <div class="text-center px-2">
-                    <div class="text-[9px] text-yellow-500 font-black mb-1">段考倒數</div>
-                    <div class="text-3xl font-num font-black text-yellow-400" id="exam-countdown">--</div>
+                <div class="text-center">
+                    <div class="text-[8px] text-yellow-500 font-bold uppercase">段考</div>
+                    <div class="text-2xl font-num font-black text-yellow-400" id="exam-countdown">--</div>
                 </div>
-                <div class="text-center px-2 border-l border-white/10">
-                    <div class="text-[9px] text-emerald-400 font-black mb-1">模擬考倒數</div>
-                    <div class="text-3xl font-num font-black text-emerald-400" id="mock-countdown">--</div>
+                <div class="text-center border-l border-white/10 pl-4">
+                    <div class="text-[8px] text-emerald-400 font-bold uppercase">模考</div>
+                    <div class="text-2xl font-num font-black text-emerald-400" id="mock-countdown">--</div>
                 </div>
-                <div class="text-center px-2 border-l border-white/10">
-                    <div class="text-[9px] text-orange-500 font-black mb-1">會考倒數</div>
-                    <div class="text-3xl font-num font-black text-orange-500" id="final-countdown">--</div>
+                <div class="text-center border-l border-white/10 pl-4">
+                    <div class="text-[8px] text-orange-500 font-bold uppercase">會考</div>
+                    <div class="text-2xl font-num font-black text-orange-500" id="final-countdown">--</div>
                 </div>
             </div>
-            <div id="clock-display" class="text-5xl font-num font-black text-white drop-shadow-xl border-l border-white/10 pl-8">00:00:00</div>
+            <div id="clock-display" class="text-4xl font-num font-black text-white border-l border-white/10 pl-6 ml-2">00:00:00</div>
         </div>
     </header>
 
     <!-- 跑馬燈 -->
-    <div class="bg-rose-600 rounded-2xl h-14 flex items-center overflow-hidden shadow-xl relative group">
-        <button onclick="toggleMarqueeSpeed(event)" class="bg-rose-700 hover:bg-rose-800 h-full px-6 flex items-center z-10 border-r border-rose-500/50 transition-colors">
-            <span id="speed-label" class="text-[10px] font-black text-rose-100">正常</span>
+    <div class="bg-rose-600 rounded-xl h-12 flex items-center overflow-hidden shadow-lg">
+        <button onclick="toggleMarqueeSpeed(event)" class="bg-rose-700 h-full px-4 flex items-center z-10 border-r border-rose-500/50">
+            <span id="speed-label" class="text-[10px] font-black uppercase">一般</span>
         </button>
-        <div class="flex-1 overflow-hidden cursor-pointer h-full flex items-center" onclick="openEdit('marquee', '修改跑馬燈公告')">
-            <div id="marquee-content" class="animate-marquee font-bold text-lg">讀取公告中...</div>
+        <div class="flex-1 overflow-hidden cursor-pointer" onclick="openEdit('marquee', '跑馬燈公告')">
+            <div id="marquee-content" class="animate-marquee font-bold">載入中...</div>
         </div>
     </div>
 
-    <!-- 主要內容區 -->
-    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-        <!-- 聯絡簿 -->
-        <section class="lg:col-span-5 flex flex-col space-y-5 min-h-0">
-            <div onclick="openEdit('homework', '今日作業與聯絡簿')" class="glass rounded-[2.5rem] p-8 flex-1 flex flex-col border-t-4 border-yellow-500 editable overflow-hidden">
-                <div class="flex justify-between items-center mb-5">
-                    <h2 class="text-xl font-black text-yellow-400 flex items-center"><i class="fas fa-edit mr-3"></i> 今日作業事項</h2>
-                    <span class="text-[10px] opacity-20"><i class="fas fa-pen"></i></span>
-                </div>
-                <div id="homework-list" class="text-2xl font-bold leading-relaxed whitespace-pre-wrap overflow-y-auto pr-3 flex-1 text-slate-100"></div>
+    <!-- 主要內容 -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+        <!-- 聯絡事項 -->
+        <section class="lg:col-span-5 flex flex-col space-y-4 min-h-0">
+            <div onclick="openEdit('homework', '作業與聯絡事項')" class="glass rounded-[2rem] p-6 flex-1 flex flex-col border-t-4 border-yellow-500 editable overflow-hidden">
+                <h2 class="text-lg font-black text-yellow-400 mb-4 flex items-center"><i class="fas fa-edit mr-3"></i> 今日聯絡事項</h2>
+                <div id="homework-list" class="text-xl font-bold leading-relaxed whitespace-pre-wrap overflow-y-auto pr-2 flex-1 text-slate-200"></div>
             </div>
-            <div onclick="openEdit('quote', '今日佳句')" class="glass rounded-2xl p-4 flex items-center space-x-4 editable border-l-4 border-indigo-400">
-                <i class="fas fa-quote-left text-indigo-400 text-lg opacity-30"></i>
-                <div id="quote-display" class="text-base italic font-bold text-indigo-100 flex-1 leading-snug"></div>
+            <div onclick="openEdit('quote', '今日佳句')" class="glass rounded-xl p-3 flex items-center space-x-3 editable border-l-4 border-indigo-400">
+                <i class="fas fa-quote-left text-indigo-400 text-xs opacity-40"></i>
+                <div id="quote-display" class="text-sm italic font-bold text-indigo-100 flex-1 leading-tight"></div>
             </div>
         </section>
 
         <!-- 重要提醒 -->
-        <section onclick="openEdit('important', '重要提醒')" class="lg:col-span-4 glass rounded-[2.5rem] p-8 border-t-4 border-blue-500 flex flex-col editable overflow-hidden">
-            <div class="flex justify-between items-center mb-5">
-                <h2 class="text-xl font-black text-blue-400 flex items-center"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
-                <span class="text-[10px] opacity-20"><i class="fas fa-thumbtack"></i></span>
-            </div>
-            <div id="important-note" class="text-2xl font-black leading-relaxed text-blue-50 whitespace-pre-wrap overflow-y-auto flex-1"></div>
+        <section onclick="openEdit('important', '重要提醒')" class="lg:col-span-4 glass rounded-[2rem] p-6 border-t-4 border-blue-500 flex flex-col editable overflow-hidden">
+            <h2 class="text-lg font-black text-blue-400 mb-4 flex items-center"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
+            <div id="important-note" class="text-xl font-bold leading-relaxed text-blue-50 whitespace-pre-wrap overflow-y-auto flex-1"></div>
         </section>
 
         <!-- 未交名單 -->
-        <section class="lg:col-span-3 glass rounded-[2.5rem] p-8 border-t-4 border-orange-500 flex flex-col overflow-hidden">
-            <div class="flex justify-between items-center mb-5">
-                <h2 class="text-xl font-black text-orange-400 flex items-center"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
-                <button onclick="openEdit('missing', '編輯未交名單', '格式教學：\n科目名稱：座號, 座號\n換行可新增不同科目。')" class="text-[9px] bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg font-bold transition-all border border-white/5">編輯</button>
+        <section class="lg:col-span-3 glass rounded-[2rem] p-6 border-t-4 border-orange-500 flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-black text-orange-400 flex items-center"><i class="fas fa-user-xmark mr-3"></i> 未交名單</h2>
+                <button onclick="openEdit('missing', '未交名單', '格式：科目：01, 05 (換行分科)')" class="text-[9px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded font-bold border border-white/5">編輯</button>
             </div>
-            <div id="missing-container" class="flex-1 overflow-y-auto pr-1"></div>
+            <div id="missing-container" class="flex-1 overflow-y-auto"></div>
         </section>
     </main>
 
-    <!-- 功能區 -->
-    <footer class="grid grid-cols-2 lg:grid-cols-4 gap-6 shrink-0 pb-2">
+    <!-- Footer -->
+    <footer class="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <!-- 抽籤 -->
-        <div class="glass rounded-2xl p-4 flex items-center justify-between overflow-hidden relative group">
+        <div class="glass rounded-xl p-3 flex items-center justify-between overflow-hidden relative group">
             <div class="z-10">
-                <p class="text-indigo-400 text-[9px] font-black uppercase tracking-wider mb-1">Random</p>
-                <div id="lucky-num" class="text-4xl font-num font-black">??</div>
+                <p class="text-indigo-400 text-[9px] font-black uppercase mb-0.5">Lucky</p>
+                <div id="lucky-num" class="text-3xl font-num font-black transition-all">??</div>
             </div>
-            <button onclick="spinLucky()" class="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-2xl flex items-center justify-center relative z-10 transition-all active:scale-90 shadow-lg shadow-indigo-600/20">
-                <i class="fas fa-dice text-2xl text-white"></i>
-            </button>
-            <div class="absolute -right-4 -bottom-4 text-white/[0.03] text-7xl font-black rotate-12">抽</div>
+            <button onclick="spinLucky()" class="w-10 h-10 bg-indigo-600 hover:bg-indigo-500 rounded-lg flex items-center justify-center relative z-10 transition-all active:scale-90"><i class="fas fa-dice text-lg"></i></button>
+            <div class="absolute -right-2 -bottom-2 text-white/5 text-5xl font-black rotate-12">抽</div>
         </div>
 
         <!-- 計時器 -->
-        <div class="glass rounded-2xl p-4 flex items-center justify-between">
+        <div class="glass rounded-xl p-3 flex items-center justify-between">
             <div>
-                <div class="flex items-center gap-2 mb-1">
-                    <p class="text-emerald-400 text-[9px] font-black uppercase tracking-wider">Timer</p>
-                    <button onclick="window.saveData({isMuted: !appData.isMuted})"><i id="mute-icon" class="fas fa-volume-up text-[10px]"></i></button>
+                <div class="flex items-center gap-2 mb-0.5">
+                    <p class="text-emerald-400 text-[9px] font-black uppercase">Timer</p>
+                    <button onclick="window.saveData({isMuted: !appData.isMuted})"><i id="mute-icon" class="fas fa-volume-up text-[9px]"></i></button>
                 </div>
                 <div id="timer-display" onclick="openEdit('timer', '設定計時器', '格式為 分:秒 (例如 05:30)')" 
-                     class="text-4xl font-num font-black text-emerald-400 cursor-pointer hover:text-white transition-colors">05:00</div>
+                     class="text-3xl font-num font-black text-emerald-400 cursor-pointer hover:text-white transition-colors">05:00</div>
             </div>
-            <div class="flex flex-col gap-1.5">
-                <button id="timer-btn" onclick="toggleTimer()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-xl font-bold text-[10px] transition-all">開始</button>
-                <button onclick="resetTimer()" class="bg-slate-700/50 hover:bg-slate-600 px-4 py-1.5 rounded-xl font-bold text-[10px] transition-all">重置</button>
+            <div class="flex flex-col gap-1">
+                <button id="timer-btn" onclick="toggleTimer()" class="bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded-lg font-bold text-[9px]">開始</button>
+                <button onclick="resetTimer()" class="bg-slate-700/50 hover:bg-slate-600 px-3 py-1 rounded-lg font-bold text-[9px]">重置</button>
             </div>
         </div>
 
-        <!-- 連結按鈕 -->
-        <a href="https://padlet.com/teacher133_5/padlet-rmnqtuy0xqgy53qh" target="_blank" class="glass rounded-2xl p-4 flex items-center space-x-4 hover:bg-indigo-600/20 transition-all border-b-2 border-indigo-500/30 group">
-            <div class="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform"><i class="fas fa-clipboard-list text-xl"></i></div>
-            <span class="font-bold text-lg tracking-tight">908電子布告欄</span>
+        <!-- 按鈕 -->
+        <a href="https://padlet.com/teacher133_5/padlet-rmnqtuy0xqgy53qh" target="_blank" class="glass rounded-xl p-3 flex items-center space-x-3 hover:bg-indigo-600/20 transition-all border-b-2 border-indigo-500/30 group">
+            <div class="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform"><i class="fas fa-clipboard-list"></i></div>
+            <span class="font-bold text-sm tracking-tight">908電子布告欄</span>
         </a>
 
-        <a href="https://www.ycjh.hlc.edu.tw/" target="_blank" class="glass rounded-2xl p-4 flex items-center space-x-4 hover:bg-emerald-600/20 transition-all border-b-2 border-emerald-500/30 group">
-            <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform"><i class="fas fa-globe text-xl"></i></div>
-            <span class="font-bold text-lg tracking-tight text-white">宜昌國中官網</span>
+        <a href="https://www.ycjh.hlc.edu.tw/" target="_blank" class="glass rounded-xl p-3 flex items-center space-x-3 hover:bg-emerald-600/20 transition-all border-b-2 border-emerald-500/30 group">
+            <div class="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform"><i class="fas fa-globe text-xl"></i></div>
+            <span class="font-bold text-sm tracking-tight">宜昌國中官網</span>
         </a>
     </footer>
 
