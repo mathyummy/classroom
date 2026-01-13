@@ -98,6 +98,7 @@
             
             const lockIcon = document.getElementById('lock-status-icon');
             const editBtnMissing = document.getElementById('btn-edit-missing');
+            const timerDisplay = document.getElementById('timer-display');
             const mainContainer = document.body;
 
             // 處理鎖定狀態與 UI 顯示
@@ -135,10 +136,10 @@
                             </div>
                             <div class="flex flex-wrap gap-2 flex-1">
                                 ${item.students.map((s, sIdx) => `
-                                    <button onclick="window.isAdmin && window.toggleStudent('${idx}', '${sIdx}')" 
+                                    <button onclick="window.toggleStudent('${idx}', '${sIdx}')" 
                                         class="w-10 h-10 rounded-xl font-black text-sm transition-all border 
-                                        ${s.done ? 'bg-white/5 border-transparent opacity-10 line-through text-slate-500' : 'bg-orange-500/30 border-orange-500/50 text-white active:scale-90 shadow-[0_0_10px_rgba(249,115,22,0.1)]'}
-                                        ${!window.isAdmin ? 'cursor-default pointer-events-none' : 'hover:scale-110 active:scale-95'}">
+                                        ${s.done ? 'bg-white/10 border-white/5 opacity-40 line-through text-slate-400' : 'bg-orange-500/30 border-orange-500/50 text-white active:scale-90 shadow-[0_0_10px_rgba(249,115,22,0.1)]'}
+                                        hover:scale-110 active:scale-95">
                                         ${s.id}
                                     </button>
                                 `).join('')}
@@ -221,9 +222,11 @@
         // --- 全域功能掛載 ---
 
         window.saveData = async (update) => {
-            // 特別開放：靜音功能不檢查 isAdmin (或是您可以選擇保留鎖定)
-            const isOnlyMute = Object.keys(update).length === 1 && update.hasOwnProperty('isMuted');
-            if (!user || (!window.isAdmin && !isOnlyMute)) return; 
+            // 開放特定欄位不檢查 isAdmin (靜音功能、未交名單切換)
+            const whitelistedKeys = ['isMuted', 'missing'];
+            const isWhitelisted = Object.keys(update).every(key => whitelistedKeys.includes(key));
+            
+            if (!user || (!window.isAdmin && !isWhitelisted)) return; 
             
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'boardConfig', 'main');
             try { await updateDoc(docRef, update); } catch (e) { await setDoc(docRef, update, { merge: true }); }
@@ -273,7 +276,9 @@
         };
 
         window.openEdit = (field, title, help = "") => {
-            // 計時器點選功能：如果是計時器 (timer)，則跳過管理權限檢查
+            // 計時器 (timer) 與未交名單 (missing) 內容修改邏輯分支：
+            // 如果是計時器，開放點選修改數字
+            // 如果是未交名單修改內容 (field === 'missing')，則必須檢查 isAdmin
             if (!window.isAdmin && field !== 'timer') return; 
             
             window.currentField = field;
@@ -317,7 +322,7 @@
             const val = input.value.trim();
             const update = {};
             
-            // 處理計時器更新邏輯 (此部分為本機變數)
+            // 處理計時器更新邏輯 (本機操作)
             if (window.currentField === 'timer') {
                 if (val.includes(':')) {
                     const [m, s] = val.split(':').map(x => parseInt(x) || 0);
@@ -328,7 +333,7 @@
                 return;
             }
             
-            // 處理其他需要資料庫更新的欄位
+            // 處理資料庫欄位更新 (受 saveData 的 whitelist 保護)
             if (window.currentField === 'missing') {
                 update.missing = val.split('\n').filter(line => line.includes('：') || line.includes(':')).map(line => {
                     const [sub, ids] = line.split(/[：:]/);
@@ -342,7 +347,13 @@
             window.closeEdit();
         };
 
-        // 計時器操作功能 (不需要 isAdmin)
+        // 開放點擊座號切換狀態 (不需要 isAdmin)
+        window.toggleStudent = (subjectIdx, studentIdx) => {
+            const updated = JSON.parse(JSON.stringify(appData.missing));
+            updated[subjectIdx].students[studentIdx].done = !updated[subjectIdx].students[studentIdx].done;
+            window.saveData({ missing: updated });
+        };
+
         window.toggleTimer = () => {
             if (timerInterval) {
                 clearInterval(timerInterval);
@@ -370,13 +381,6 @@
             timerSeconds = 300; 
             updateTimerDisplay();
             document.getElementById('timer-btn').textContent = "開始";
-        };
-
-        window.toggleStudent = (subjectIdx, studentIdx) => {
-            if (!window.isAdmin) return;
-            const updated = JSON.parse(JSON.stringify(appData.missing));
-            updated[subjectIdx].students[studentIdx].done = !updated[subjectIdx].students[studentIdx].done;
-            window.saveData({ missing: updated });
         };
 
         window.toggleMarqueeSpeed = (e) => {
@@ -492,7 +496,7 @@
 </head>
 <body class="space-y-2">
 
-    <!-- 管理員登入自定義彈窗 -->
+    <!-- 管理員登入彈窗 -->
     <div id="admin-login-modal" class="fixed inset-0 bg-black/95 backdrop-blur-3xl z-[200] hidden items-center justify-center p-4">
         <div class="bg-slate-900 border border-white/20 w-full max-sm:w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center">
             <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(79,70,229,0.5)]">
@@ -590,8 +594,8 @@
 
     <!-- 跑馬燈 -->
     <div class="bg-gradient-to-r from-rose-600 via-rose-500 to-rose-600 h-14 flex items-center overflow-hidden shadow-2xl shrink-0 border-y border-rose-400/40">
-        <button onclick="window.isAdmin && window.toggleMarqueeSpeed(event)" class="bg-black/30 h-full px-5 flex items-center z-10 border-r border-white/10 hover:bg-black/50 transition-all group">
-            <span id="speed-label" class="text-[10px] font-black uppercase tracking-tighter group-hover:scale-110 transition-transform text-white">一般</span>
+        <button onclick="window.isAdmin && window.toggleMarqueeSpeed(event)" class="bg-black/30 h-full px-5 flex items-center z-10 border-r border-white/10 hover:bg-black/50 transition-all group text-white">
+            <span id="speed-label" class="text-[10px] font-black uppercase tracking-tighter group-hover:scale-110 transition-transform">一般</span>
         </button>
         <div class="flex-1 overflow-hidden cursor-pointer" onclick="window.isAdmin && window.openEdit('marquee', '跑馬燈公告')">
             <div id="marquee-content" class="animate-marquee font-black text-2xl tracking-wide drop-shadow-md text-white">載入中...</div>
@@ -641,7 +645,7 @@
                 <div id="lucky-num" class="text-3xl font-num font-black text-white drop-shadow-lg">??</div>
             </div>
             <button onclick="window.spinLucky()" class="w-11 h-11 bg-indigo-600 rounded-xl flex items-center justify-center z-10 active:scale-90 transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500"><i class="fas fa-dice text-xl text-white"></i></button>
-            <div class="absolute -right-2 -bottom-2 text-white/5 text-5xl font-black rotate-12 group-hover:rotate-0 transition-transform">抽</div>
+            <div class="absolute -right-2 -bottom-2 text-white/5 text-5xl font-black rotate-12 group-hover:rotate-0 transition-transform text-white">抽</div>
         </div>
 
         <!-- 計時器區域：直接開放 -->
@@ -649,15 +653,12 @@
             <div class="flex-1">
                 <div class="flex items-center gap-3 mb-1">
                     <p class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] opacity-80">Timer</p>
-                    <!-- 靜音按鈕不隱藏 -->
                     <button id="btn-mute-toggle" onclick="window.saveData({isMuted: !appData.isMuted})" class="hover:scale-110 transition-transform"><i id="mute-icon" class="fas fa-volume-up text-[10px] text-emerald-400"></i></button>
                 </div>
-                <!-- 計時器數字點選開放 (不檢查 isAdmin) -->
                 <div id="timer-display" onclick="window.openEdit('timer', '設定計時器', '分:秒')" 
                      class="text-3xl font-num font-black text-emerald-400 cursor-pointer drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] hover:text-emerald-300 transition-colors">05:00</div>
             </div>
             <div class="flex flex-col gap-1 ml-2">
-                <!-- 操作按鈕不隱藏 -->
                 <button id="timer-btn" onclick="window.toggleTimer()" class="bg-emerald-600 px-3 py-0.5 rounded-md font-bold text-[8px] hover:bg-emerald-500 transition-colors text-white">開始</button>
                 <button onclick="window.resetTimer()" class="bg-slate-700/50 px-3 py-0.5 rounded-md font-bold text-[8px] hover:bg-slate-700 transition-colors text-white">重置</button>
             </div>
