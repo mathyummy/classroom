@@ -90,10 +90,20 @@
             if (el) el.textContent = `${m}:${s}`;
         }
 
+        // 輔助函數：將編號上色
+        function formatNumberedText(text, colorClass) {
+            if (!text) return "";
+            // 匹配行首的數字編號 (例如 1. 或 2、)
+            return text.replace(/^(\d+[\.．、\s])/gm, `<span class="${colorClass}">$1</span>`);
+        }
+
         function renderBoard() {
             document.getElementById('marquee-content').textContent = appData.marquee;
-            document.getElementById('homework-list').textContent = appData.homework;
-            document.getElementById('important-note').textContent = appData.important;
+            
+            // 修正 4: 編號顏色同步
+            document.getElementById('homework-list').innerHTML = formatNumberedText(appData.homework, 'text-yellow-400');
+            document.getElementById('important-note').innerHTML = formatNumberedText(appData.important, 'text-blue-400');
+            
             document.getElementById('quote-display').textContent = appData.quote;
             
             const lockIcon = document.getElementById('lock-status-icon');
@@ -417,7 +427,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         
         html, body { 
-            /* 修正 3: 移除 overflow: hidden，改為 min-h-screen 以啟用全頁滾動 */
             min-height: 100%; 
             margin: 0; 
             padding: 0; 
@@ -474,13 +483,11 @@
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
 
-        /* 內容區高度修正：在電腦版給予最小高度，確保不會縮得太小 */
         .content-box { min-height: 250px; }
 
         @media (max-width: 1023px) {
             body { gap: 1rem; padding-bottom: 2rem; }
             main { display: flex !important; flex-direction: column !important; gap: 1rem; }
-            /* 修正 1: 行動裝置時移除高度限制，讓內容撐開 */
             .glass { height: auto !important; min-height: auto !important; }
             header { padding-left: 0.5rem; padding-right: 0.5rem; }
             .content-box { min-height: auto; }
@@ -601,23 +608,28 @@
         <section class="flex flex-col">
             <div onclick="window.isAdmin && window.openEdit('homework', '今日聯絡簿')" class="glass p-7 flex-1 border-t-4 border-yellow-400/80 editable content-box shadow-[0_0_50px_rgba(250,204,21,0.05)] text-white">
                 <h2 class="text-lg font-black text-yellow-400 mb-4 flex items-center uppercase tracking-widest"><i class="fas fa-edit mr-3"></i> 今日聯絡簿</h2>
-                <div id="homework-list" class="text-2xl font-bold leading-loose whitespace-pre-wrap text-slate-100"></div>
+                <!-- 修正 2: 文字縮小至 text-lg -->
+                <div id="homework-list" class="text-lg font-bold leading-loose whitespace-pre-wrap text-slate-100"></div>
             </div>
         </section>
 
-        <!-- 欄位 2: 重要提醒 + 佳句 (修正 2: 這裡在電腦版採用彈性分配，手機版則依序排列) -->
+        <!-- 欄位 2: 重要提醒 + 佳句 -->
         <section class="flex flex-col gap-6">
             <div onclick="window.isAdmin && window.openEdit('important', '重要提醒')" class="glass p-7 flex-1 border-t-4 border-blue-400/80 editable content-box shadow-[0_0_50px_rgba(96,165,250,0.05)] text-white">
                 <h2 class="text-lg font-black text-blue-400 mb-4 flex items-center uppercase tracking-widest"><i class="fas fa-bullhorn mr-3"></i> 重要提醒</h2>
-                <div id="important-note" class="text-2xl font-bold leading-loose text-blue-50 whitespace-pre-wrap"></div>
+                <!-- 修正 2: 文字縮小至 text-lg -->
+                <div id="important-note" class="text-lg font-bold leading-loose text-blue-50 whitespace-pre-wrap"></div>
             </div>
-            <!-- 修正 2: 給予固定高度，確保不吃掉上方提醒區塊 -->
-            <div onclick="window.isAdmin && window.openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-7 h-auto lg:h-56 flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group text-white">
-                <h2 id="quote-title" class="text-xs font-black text-indigo-400/60 uppercase tracking-[0.3em] mb-4 self-start">今日佳句</h2>
+            
+            <!-- 修正 3: 加入 mx-auto 與 w-fit 使寬度根據內容調整 -->
+            <div onclick="window.isAdmin && window.openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-7 h-auto lg:h-56 flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group text-white mx-auto w-fit max-w-full">
+                <!-- 修正 1: 佳句標題字體加大至 text-lg -->
+                <h2 id="quote-title" class="text-lg font-black text-indigo-400 uppercase tracking-[0.3em] mb-4 self-start">今日佳句</h2>
                 <div class="w-full text-left opacity-20 group-hover:opacity-40 transition-opacity">
                     <i class="fas fa-quote-left text-3xl"></i>
                 </div>
-                <div id="quote-display" class="text-2xl italic font-black text-white text-center leading-relaxed px-6 drop-shadow-md"></div>
+                <!-- 修正 2: 文字縮小至 text-lg -->
+                <div id="quote-display" class="text-lg italic font-bold text-white text-center leading-relaxed px-6 drop-shadow-md"></div>
                 <div class="w-full text-right opacity-20 group-hover:opacity-40 transition-opacity">
                     <i class="fas fa-quote-right text-3xl"></i>
                 </div>
