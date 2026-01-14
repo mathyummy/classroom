@@ -70,10 +70,12 @@
         function updateCountdowns() {
             const calc = (dateStr) => {
                 if (!dateStr) return "--";
-                const target = new Date(dateStr).setHours(0,0,0,0);
-                const now = new Date().setHours(0,0,0,0);
+                // 修正：計算倒數天數也統一使用台北時區時間
+                const target = new Date(dateStr + "T00:00:00+08:00").getTime();
+                const now = new Date().toLocaleString("en-US", {timeZone: "Asia/Taipei"});
+                const nowMs = new Date(now).setHours(0,0,0,0);
                 if (isNaN(target)) return "ERR";
-                const diff = Math.ceil((target - now) / 86400000);
+                const diff = Math.ceil((target - nowMs) / 86400000);
                 return diff < 0 ? 0 : diff;
             };
             document.getElementById('exam-countdown').textContent = calc(appData.examDate);
@@ -222,16 +224,22 @@
 
         window.openAdminLogin = () => {
             if (window.isAdmin) {
-                document.getElementById('admin-logout-modal').classList.remove('hidden').classList.add('flex');
+                const modal = document.getElementById('admin-logout-modal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
                 return;
             }
-            document.getElementById('admin-login-modal').classList.remove('hidden').classList.add('flex');
+            const modal = document.getElementById('admin-login-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
             const input = document.getElementById('admin-pass-input');
             if(input) input.focus();
         };
 
         window.closeAdminLogin = () => {
-            document.getElementById('admin-login-modal').classList.add('hidden').classList.remove('flex');
+            const modal = document.getElementById('admin-login-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
             const input = document.getElementById('admin-pass-input');
             if(input) input.value = "";
         };
@@ -247,8 +255,17 @@
             }
         };
 
-        window.closeAdminLogout = () => document.getElementById('admin-logout-modal').classList.add('hidden').classList.remove('flex');
-        window.handleAdminLogout = () => { window.isAdmin = false; renderBoard(); window.closeAdminLogout(); };
+        window.closeAdminLogout = () => {
+            const modal = document.getElementById('admin-logout-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+        
+        window.handleAdminLogout = () => { 
+            window.isAdmin = false; 
+            renderBoard(); 
+            window.closeAdminLogout(); 
+        };
 
         window.openEdit = (field, title, help = "") => {
             if (!window.isAdmin && field !== 'timer') return; 
@@ -273,12 +290,18 @@
             const input = document.getElementById('modal-input');
             if (input) {
                 input.value = val || "";
-                document.getElementById('modal').classList.remove('hidden').classList.add('flex');
+                const modal = document.getElementById('modal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
                 input.focus();
             }
         };
 
-        window.closeEdit = () => document.getElementById('modal').classList.add('hidden').classList.remove('flex');
+        window.closeEdit = () => {
+            const modal = document.getElementById('modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
 
         window.confirmEdit = () => {
             const input = document.getElementById('modal-input');
@@ -303,7 +326,7 @@
             } else if (window.currentField === 'missing') {
                 update.missing = val.split('\n').filter(line => line.includes('：') || line.includes(':')).map(line => {
                     const [sub, ids] = line.split(/[：:]/);
-                    return { subject: sub.trim(), students: ids.split(/[,，\s]+/).filter(i => i).map(id => ({ id: id.trim().padStart(2, '0'), done: false })) };
+                    return { subject: sub.trim(), students: ids.split(/[,，.\s．。]+/).filter(i => i).map(id => ({ id: id.trim().padStart(2, '0'), done: false })) };
                 });
             } else if (window.currentField === 'quote') {
                 update.quote = val;
@@ -384,8 +407,9 @@
             init();
             setInterval(() => {
                 const now = new Date();
-                document.getElementById('clock-display').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
-                document.getElementById('date-display').textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+                const options = { timeZone: 'Asia/Taipei', hour12: false };
+                document.getElementById('clock-display').textContent = now.toLocaleTimeString('zh-TW', options);
+                document.getElementById('date-display').textContent = now.toLocaleDateString('zh-TW', { ...options, year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
             }, 1000);
         };
     </script>
@@ -516,7 +540,6 @@
                 <div id="homework-list" class="text-lg font-bold leading-loose whitespace-pre-wrap text-slate-100"></div>
             </div>
             
-            <!-- 今日佳句：修正寬度與預設高度 -->
             <div onclick="window.isAdmin && window.openEdit('quote', '佳句與札記', '請點選類別並輸入內容')" class="glass p-5 min-h-[120px] h-auto flex flex-col justify-center items-center editable border-l-8 border-indigo-500 shrink-0 bg-indigo-950/50 shadow-xl overflow-hidden group text-white w-full">
                 <h2 id="quote-title" class="text-lg font-black text-indigo-400 uppercase tracking-[0.3em] mb-3 self-start">今日佳句</h2>
                 <div class="w-full text-left opacity-20 group-hover:opacity-40 transition-opacity"><i class="fas fa-quote-left text-2xl"></i></div>
