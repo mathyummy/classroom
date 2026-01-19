@@ -12,16 +12,16 @@
         import { getFirestore, doc, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // --- Firebase 配置 ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'classroom-908-board';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyAfsi-TZ8LrFfZ2Cw6w1DQNTaM_q-oiL-Q",
-            authDomain: "classroom-board.firebaseapp.com",
-            projectId: "classroom-board",
-            storageBucket: "classroom-board.firebasestorage.app",
-            messagingSenderId: "802885901626",
-            appId: "1:802885901626:web:df25f12cef342c373ac403"
-        };
+   // --- Firebase 配置 ---
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'classroom-908-board';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+    apiKey: "AIzaSyAfsi-TZ8LrFfZ2Cw6w1DQNTaM_q-oiL-Q",
+    authDomain: "classroom-board.firebaseapp.com",
+    projectId: "classroom-board",
+    storageBucket: "classroom-board.firebasestorage.app",
+    messagingSenderId: "802885901626",
+    appId: "1:802885901626:web:df25f12cef342c373ac403"
+};
 
         let db, auth, user;
         let timerInterval = null;
@@ -628,4 +628,5 @@
     </footer>
 </body>
 </html>
+
 
